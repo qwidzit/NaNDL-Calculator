@@ -1,0 +1,10 @@
+{
+  "name": "nandl-precision-calculator",
+  "version": "0.1.0",
+  "description": "Static site computing the NaNDL precision score (L*) for Geometry-Dash-style levels.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}

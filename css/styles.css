@@ -1,0 +1,101 @@
+:root{
+  --bg:#0d1017; --panel:#151a23; --panel2:#1b212c; --line:#2a3341;
+  --txt:#e7ecf3; --muted:#8b97a8; --accent:#5ed0c6; --accent2:#7aa2ff;
+  --warn:#f0a35e; --good:#6ee7a8; --broke:#ff6b6b;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:radial-gradient(1200px 600px at 70% -10%, #182234 0%, var(--bg) 55%);
+  color:var(--txt); font-family:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;
+  line-height:1.5; padding:28px 16px 80px;
+}
+.wrap{max-width:880px; margin:0 auto}
+h1{font-size:26px; margin:0 0 2px; letter-spacing:.5px}
+.sub{color:var(--muted); font-size:13px; margin-bottom:22px}
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:18px}
+.panel h2{font-size:14px; text-transform:uppercase; letter-spacing:1px; color:var(--accent); margin:0 0 14px}
+label{font-size:13px; color:var(--muted)}
+input[type=number]{
+  background:var(--panel2); border:1px solid var(--line); color:var(--txt);
+  border-radius:8px; padding:8px 10px; font-size:14px; width:100%;
+}
+input[type=number]:focus{outline:none; border-color:var(--accent2)}
+.row{display:flex; gap:16px; flex-wrap:wrap}
+.field{flex:1; min-width:150px}
+.field .hint{font-size:11px; color:var(--muted); margin-top:3px}
+.grid{display:grid; grid-template-columns:repeat(5,1fr); gap:10px}
+.cell{background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:8px}
+.cell label{display:block; font-size:11px; margin-bottom:4px; color:var(--muted)}
+.cell .win{color:var(--accent2); font-weight:600}
+.cell .ms{font-size:10px; color:#5b6675}
+
+/* segmented control */
+.seg{display:inline-flex; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:3px; gap:3px}
+.seg button{background:transparent; border:none; color:var(--muted); padding:7px 16px; border-radius:8px; font-size:13px; cursor:pointer; font-family:inherit}
+.seg button.active{background:var(--accent); color:#08201d; font-weight:600}
+
+/* modifiers */
+.modrow{display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--line)}
+.modrow:first-of-type{border-top:none}
+.modrow .name{flex:1}
+.modrow .name b{display:inline-block; font-size:14px}
+.modrow .name .desc{display:block; font-size:11px; color:var(--muted)}
+.modrow .kf{width:130px}
+.modrow .kf label{font-size:10px}
+.badge{display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.5px; color:#2a0d0d;
+  background:var(--broke); border-radius:5px; padding:1px 6px; margin-left:7px; vertical-align:middle}
+.switch{position:relative; width:44px; height:24px; flex:0 0 auto}
+.switch input{opacity:0; width:0; height:0}
+.slider{position:absolute; inset:0; background:#333c4a; border-radius:24px; transition:.2s; cursor:pointer}
+.slider:before{content:""; position:absolute; height:18px; width:18px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s}
+.switch input:checked + .slider{background:var(--accent)}
+.switch input:checked + .slider:before{transform:translateX(20px)}
+
+/* manual list */
+.mhead{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; gap:12px; flex-wrap:wrap}
+table.manual{width:100%; border-collapse:collapse}
+table.manual th{font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); text-align:left; padding:4px 8px; font-weight:600}
+table.manual td{padding:4px 8px}
+table.manual input{width:100%}
+.del{background:#2a1c1c; border:1px solid #4a2b2b; color:#ff8a8a; border-radius:8px; padding:7px 10px; cursor:pointer; font-size:13px; width:100%}
+.del:hover{background:#3a2424}
+.addbtn{background:var(--panel2); border:1px dashed var(--line); color:var(--accent2); border-radius:8px; padding:9px 14px; cursor:pointer; font-size:13px; margin-top:10px; width:100%}
+.addbtn:hover{border-color:var(--accent2)}
+.unitcell{width:70px; text-align:center; color:var(--accent); font-size:13px}
+
+.mtools{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px}
+.btn2{background:var(--panel2); border:1px solid var(--line); color:var(--accent2); border-radius:8px; padding:8px 14px; cursor:pointer; font-size:13px; font-family:inherit}
+.btn2:hover{border-color:var(--accent2)}
+.btn2.ghost{color:var(--muted)}
+.imstatus{font-size:12px; color:var(--muted)}
+.overlay{position:fixed; inset:0; background:rgba(4,7,12,.72); display:none; align-items:center; justify-content:center; padding:20px; z-index:50}
+.overlay.show{display:flex}
+.modal{background:var(--panel); border:1px solid var(--line); border-radius:14px; max-width:520px; width:100%; padding:22px 24px; box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal h3{margin:0 0 6px; font-size:17px; color:var(--txt)}
+.modal p{font-size:13px; color:#c4cdda; margin:8px 0}
+.modal pre{background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:12px; font-size:12.5px; color:var(--good); overflow:auto; margin:10px 0; line-height:1.5}
+.modal .close{float:right; background:none; border:none; color:var(--muted); font-size:22px; cursor:pointer; line-height:1; margin:-4px -6px 0 0}
+.modal code{background:var(--panel2); padding:1px 6px; border-radius:5px; color:var(--good)}
+
+.result{
+  background:linear-gradient(135deg,#16303a,#131b27); border:1px solid #234a52;
+  border-radius:16px; padding:24px; text-align:center;
+}
+.result .rlabel{font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color:var(--accent)}
+.result .big{font-size:52px; font-weight:700; margin:6px 0 2px; color:#fff; font-variant-numeric:tabular-nums}
+.result .rsub{color:var(--muted); font-size:13px; max-width:520px; margin:6px auto 0}
+.stats{display:flex; justify-content:center; gap:26px; flex-wrap:wrap; margin-top:18px}
+.stat{min-width:110px}
+.stat .v{font-size:18px; font-weight:600; color:var(--accent2); font-variant-numeric:tabular-nums}
+.stat .l{font-size:11px; color:var(--muted)}
+.msg{color:var(--warn); font-size:14px}
+details{margin-top:8px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:6px 20px}
+details summary{cursor:pointer; padding:12px 0; font-size:13px; color:var(--accent); font-weight:600; list-style:none}
+details summary::-webkit-details-marker{display:none}
+details .body{font-size:13px; color:#c4cdda; padding-bottom:16px}
+details .body code{background:var(--panel2); padding:1px 6px; border-radius:5px; color:var(--good); font-size:12.5px}
+details .body h4{color:var(--accent2); margin:16px 0 6px; font-size:13px}
+.totline{font-size:12px; color:var(--muted); margin-top:12px}
+.totline b{color:var(--txt)}
+.hidden{display:none}
+a{color:var(--accent2)}

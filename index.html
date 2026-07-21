@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Estimate the timing precision needed to complete a Geometry-Dash-style level, using the NaNDL probabilistic difficulty model.">
+<title>NaNDL Precision Calculator</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>NaNDL Precision Calculator</h1>
+  <div class="sub">Read off the precision needed to average a target-time completion — from a frame-window histogram, or from an exact list of timed inputs.</div>
+
+  <div class="panel">
+    <h2>Setup</h2>
+    <div class="row">
+      <div class="field">
+        <label>Frame rate (fps)</label>
+        <input type="number" id="fps" value="240" min="1" step="1">
+        <div class="hint">1 frame = 1/fps seconds</div>
+      </div>
+      <div class="field">
+        <label>Level length (seconds)</label>
+        <input type="number" id="tlen" value="60" min="0.1" step="0.5">
+        <div class="hint">total level time; also used for % positions</div>
+      </div>
+      <div class="field">
+        <label>Target time (hours)</label>
+        <input type="number" id="target" value="24" min="0.001" step="1">
+        <div class="hint">precision is solved for this expected time</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Input mode</h2>
+    <div class="seg" id="modeSeg">
+      <button data-mode="hist" class="active">Histogram</button>
+      <button data-mode="manual">Manual list</button>
+    </div>
+
+    <!-- histogram -->
+    <div id="histPanel" style="margin-top:16px">
+      <div class="grid" id="grid"></div>
+      <div class="totline">Total inputs: <b id="histTotal">0</b> &nbsp;·&nbsp; evenly spread across the level</div>
+    </div>
+
+    <!-- manual -->
+    <div id="manualPanel" class="hidden" style="margin-top:16px">
+      <div class="mhead">
+        <div style="font-size:12px;color:var(--muted)">Add each input with its position and window. Ordering &amp; gaps come straight from your list.</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;color:var(--muted)">Time in</span>
+          <div class="seg" id="unitSeg">
+            <button data-unit="sec" class="active">Seconds</button>
+            <button data-unit="pct">%</button>
+          </div>
+        </div>
+      </div>
+      <div class="mtools">
+        <button class="btn2" id="importBtn">&#8593; Import .txt</button>
+        <button class="btn2 ghost" id="guideBtn">Format guide</button>
+        <input type="file" id="fileInput" accept=".txt,text/plain" style="display:none">
+        <span class="imstatus" id="imStatus"></span>
+      </div>
+      <table class="manual">
+        <thead><tr>
+          <th style="width:34%">Time (<span id="unitLabelHead">s</span>)</th>
+          <th style="width:34%">Window (frames)</th>
+          <th style="width:20%">ms</th>
+          <th style="width:12%"></th>
+        </tr></thead>
+        <tbody id="manualBody"></tbody>
+      </table>
+      <button class="addbtn" id="addRow">+ Add input</button>
+      <div class="totline">Total inputs: <b id="manTotal">0</b></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Modifiers <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— off by default; constants are placeholders (the site does not publish them)</span></h2>
+
+    <div class="modrow">
+      <label class="switch"><input type="checkbox" id="nerveOn"><span class="slider"></span></label>
+      <div class="name"><b>Nerve</b><span class="desc">&lambda; = e^(&minus;k&middot;t): later inputs (in seconds) are shakier</span></div>
+      <div class="kf"><label>k_t (per sec)</label><input type="number" id="nerveK" value="0.0015" step="0.0005" min="0"></div>
+    </div>
+
+    <div class="modrow">
+      <label class="switch"><input type="checkbox" id="fatigueOn"><span class="slider"></span></label>
+      <div class="name"><b>Fatigue</b><span class="badge">BROKEN?</span><span class="desc">&lambda; = e^(&minus;k&middot;i): later inputs (by index) degrade</span></div>
+      <div class="kf"><label>k_u (per input)</label><input type="number" id="fatigueK" value="0.00075" step="0.00025" min="0"></div>
+    </div>
+
+    <div class="modrow">
+      <label class="switch"><input type="checkbox" id="cpsOn"><span class="slider"></span></label>
+      <div class="name"><b>CPS</b><span class="badge">BROKEN?</span><span class="desc">&lambda; = (4 / max(1, 2c))^k: fast clicking hurts precision</span></div>
+      <div class="kf"><label>k_c (exponent)</label><input type="number" id="cpsK" value="2" step="0.25" min="0"></div>
+    </div>
+  </div>
+
+  <div class="result" id="result">
+    <div class="rlabel">Required Precision &nbsp;L*</div>
+    <div class="big" id="lstar">—</div>
+    <div class="rsub" id="rsub">Enter a level length and at least one input.</div>
+    <div class="stats" id="stats" style="display:none">
+      <div class="stat"><div class="v" id="sigma">—</div><div class="l">timing window &sigma; = 1/L*</div></div>
+      <div class="stat"><div class="v" id="pc">—</div><div class="l">P(C) per attempt at L*</div></div>
+      <div class="stat"><div class="v" id="etc">—</div><div class="l">expected time to complete</div></div>
+    </div>
+  </div>
+
+  <details>
+    <summary>How it works &amp; assumptions</summary>
+    <div class="body">
+      <p>Each input <i>i</i> has a window of <code>N&#8341;</code> frames, so its duration is
+      <code>w&#8341; = N&#8341; / fps</code> seconds. A player with precision <code>L</code> (bigger = sharper;
+      L&nbsp;=&nbsp;1/&sigma; of their timing error in seconds) clears that input if their timing lands inside the
+      half-window, giving <code>p&#8341; = erf( (&frac12;&middot;w&#8341;&middot;L) / &radic;2 )</code>.</p>
+
+      <h4>Level metrics</h4>
+      <p>Completion probability <code>P(C) = &prod; p&#8341;</code>. Reach probability
+      <code>r&#8341; = &prod;&#8323;&#8322;&#8339;&#8342; p&#8331;</code>. Expected time per attempt
+      <code>E[T&#8329;] = t&#8345;&middot;P(C) + &sum; t&#8341;&middot;r&#8341;&middot;q&#8341;</code> (<code>q&#8341;=1&minus;p&#8341;</code>,
+      <code>t&#8345;</code> = level length), and expected time to complete <code>E[T&#9557;] = E[T&#8329;] / P(C)</code>.
+      The tool bisects on <code>L</code> for <b>L*</b>, where <code>E[T&#9557;]</code> equals your target time.
+      It also shows <code>&sigma; = 1/L*</code> in milliseconds.</p>
+
+      <h4>Two input modes</h4>
+      <p><b>Histogram</b> — you give counts per frame-window size; the tool assumes inputs are evenly spaced across the
+      level and evenly interleaved by difficulty (no clustering). With modifiers off, the result depends only on the
+      histogram, level length and target.</p>
+      <p><b>Manual list</b> — you give each input's exact time and window, so ordering, gaps and per-input positions are
+      taken directly from your data (nothing is scattered evenly). The <b>Seconds / %</b> switch reads times either as
+      seconds or as a percentage of the level length, where % grows evenly across the level (50% = halfway in time).</p>
+
+      <h4>Modifiers</h4>
+      <p>Each enabled modifier multiplies an input's effective window before the probability is taken: <b>Nerve</b>
+      <code>e^(&minus;k&middot;t&#8341;)</code>, <b>Fatigue</b> <code>e^(&minus;k&middot;i)</code>, <b>CPS</b>
+      <code>(4/max(1,2c))^k</code> where <code>c</code> is the local clicks/sec from the gap to the previous input.
+      Fatigue and CPS are marked <span class="badge">BROKEN?</span> and all three are off by default; the constants are
+      tunable placeholders because the NaNDL site does not publish its calibrated values.</p>
+    </div>
+  </details>
+
+  <div class="overlay" id="guideModal">
+    <div class="modal">
+      <button class="close" id="guideClose">&times;</button>
+      <h3>Import format</h3>
+      <p>A plain <code>.txt</code> file, one input per line, written as <code>time - window</code>:</p>
+      <pre>1.5 - 3
+2.1 - 5
+2.9 - 15
+5.1 - 8
+5.5 - 8
+8.1 - 11
+10 - 4</pre>
+      <p><b>time</b> is the input's position and <b>window</b> is its size in frames. A dash separates them; spaces around the dash are optional (<code>1.5 - 3</code> and <code>1.5-3</code> both work).</p>
+      <p>Time is read in whatever the <b>Seconds / %</b> switch is set to at import — so the same file loads as absolute seconds in Seconds mode, or as percentages of the level length in % mode.</p>
+      <p>Blank lines and anything that isn't a <code>number - number</code> pair are skipped. Importing <b>replaces</b> the current list.</p>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
