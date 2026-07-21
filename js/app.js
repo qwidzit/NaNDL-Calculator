@@ -5,11 +5,12 @@
 // offline service worker. No browser storage — sharable state lives in the URL.
 // ============================================================================
 
-import { MAXW, histInputs, evaluate, solveLstar, perInputStats, sliceRun } from "./calc.js";
+import { MAXW, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile } from "./calc.js";
 
 let mode="hist";
 let unit="sec";
 let restoring=false;   // true while applying URL state, to suppress hash writes
+let lastProfile=null;  // latest difficulty-curve samples, for hover readout
 
 const $ = id => document.getElementById(id);
 function num(id){const v=parseFloat($(id).value); return isNaN(v)?0:v;}
@@ -144,6 +145,28 @@ $('guideBtn').addEventListener('click',()=>guideModal.classList.add('show'));
 $('guideClose').addEventListener('click',()=>guideModal.classList.remove('show'));
 guideModal.addEventListener('click',e=>{ if(e.target===guideModal) guideModal.classList.remove('show'); });
 
+// ---- clear all (with confirm popup) ----------------------------------------
+const confirmModal=$('confirmModal');
+$('clearBtn').addEventListener('click',()=>{
+  const n=document.querySelectorAll('#manualBody tr').length;
+  const status=$('imStatus');
+  if(n===0){ status.style.color='var(--muted)'; status.textContent='List is already empty.'; return; }
+  $('confirmCount').textContent=n;
+  confirmModal.classList.add('show');
+});
+$('confirmCancel').addEventListener('click',()=>confirmModal.classList.remove('show'));
+confirmModal.addEventListener('click',e=>{ if(e.target===confirmModal) confirmModal.classList.remove('show'); });
+$('confirmClear').addEventListener('click',()=>{
+  manualBody.innerHTML='';
+  confirmModal.classList.remove('show');
+  const status=$('imStatus'); status.style.color='var(--good)'; status.textContent='Cleared all inputs.';
+  recompute();
+});
+// Esc closes any open modal
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') document.querySelectorAll('.overlay.show').forEach(o=>o.classList.remove('show'));
+});
+
 // ---- helpers ---------------------------------------------------------------
 function parseRange(str){
   const m=String(str).match(/(-?\d*\.?\d+)\s*-\s*(-?\d*\.?\d+)/);
@@ -200,6 +223,88 @@ function renderBreakdown(Lstar,cfg,Teff,runActive,rangeLabel){
   bd.classList.remove('hidden');
 }
 
+// ---- difficulty profile (manual mode) --------------------------------------
+function renderDifficulty(inputs,T,run){
+  const panel=$('diffPanel');
+  if(mode!=='manual' || !(T>0) || inputs.length===0){ panel.classList.add('hidden'); lastProfile=null; return; }
+  const h=parseFloat($('smooth').value)||4;
+  $('smoothVal').textContent=h.toFixed(1)+'%';
+  const prof=difficultyProfile(inputs,T,{bandwidthPct:h,samples:240});
+  panel.classList.remove('hidden');
+
+  const W=1000,H=200,padL=6,padR=6,padT=10,padB=6;
+  const plotW=W-padL-padR, plotH=H-padT-padB, baseY=H-padB;
+  const X=x=> padL + (x/prof.xmax)*plotW;
+  const Y=v=> padT + (1-v)*plotH;
+
+  let area=`M ${X(0).toFixed(1)} ${baseY}`, line='';
+  for(let j=0;j<prof.xs.length;j++){
+    const px=X(prof.xs[j]).toFixed(1), py=Y(prof.ys[j]).toFixed(1);
+    area+=` L ${px} ${py}`;
+    line+=(j===0?`M ${px} ${py}`:` L ${px} ${py}`);
+  }
+  area+=` L ${X(prof.xmax).toFixed(1)} ${baseY} Z`;
+
+  let grid='';
+  for(const gx of [0,25,50,75,100]){
+    if(gx>prof.xmax) continue;
+    const px=X(gx).toFixed(1);
+    grid+=`<line x1="${px}" y1="${padT}" x2="${px}" y2="${baseY}" class="gl"/>`;
+  }
+  let runrect='';
+  if(run && run.active){
+    const rx1=X(Math.max(0,run.loPct)), rx2=X(Math.min(prof.xmax,run.hiPct));
+    if(rx2>rx1) runrect=`<rect x="${rx1.toFixed(1)}" y="${padT}" width="${(rx2-rx1).toFixed(1)}" height="${plotH}" class="runband"/>`;
+  }
+  const peak=`<circle cx="${X(prof.peakXPct).toFixed(1)}" cy="${Y(1).toFixed(1)}" r="3.5" class="peakdot"/>`;
+
+  $('diffSvg').innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Difficulty across the level">
+    <defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff6b6b" stop-opacity="0.85"/>
+      <stop offset="45%" stop-color="#f0a35e" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#5ed0c6" stop-opacity="0.10"/>
+    </linearGradient></defs>
+    ${grid}${runrect}
+    <path d="${area}" fill="url(#dg)"/>
+    <path d="${line}" fill="none" stroke="#7aa2ff" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    ${peak}
+  </svg>`;
+
+  // axis labels as HTML (avoids SVG text distortion under preserveAspectRatio=none)
+  let axis='';
+  for(const gx of [0,25,50,75,100]){
+    if(gx>prof.xmax) continue;
+    const leftPct=gx/prof.xmax*100;
+    const pos = gx===0 ? 'left:3px' : gx===100 ? `left:${leftPct}%;transform:translateX(-100%)` : `left:${leftPct}%;transform:translateX(-50%)`;
+    axis+=`<span style="${pos}">${gx}%</span>`;
+  }
+  $('diffAxis').innerHTML=axis;
+
+  const tight=inputs.reduce((a,b)=> b.k<a.k?b:a, inputs[0]);
+  const f=num('fps');
+  const tightMs=f>0 ? (1000*tight.k/f).toFixed(1)+' ms' : '—';
+  $('diffCaption').innerHTML=`Relative difficulty across the level — higher = tighter windows and/or denser inputs. `+
+    `Hardest around <b>${prof.peakXPct.toFixed(0)}%</b>; tightest window <b>${tight.k}f</b> (~${tightMs}).`;
+
+  lastProfile={xs:prof.xs, ys:prof.ys, xmax:prof.xmax};
+}
+// hover readout on the chart (attached once; reads the latest lastProfile)
+{
+  const chart=$('diffChart'), cur=$('diffCursor'), tip=$('diffTip');
+  chart.addEventListener('mousemove',e=>{
+    if(!lastProfile) return;
+    const rect=chart.getBoundingClientRect();
+    let frac=(e.clientX-rect.left)/rect.width; frac=Math.min(1,Math.max(0,frac));
+    const xPct=frac*lastProfile.xmax;
+    const y=lastProfile.ys[Math.round(frac*(lastProfile.ys.length-1))]||0;
+    const leftPx=frac*rect.width;
+    cur.style.left=leftPx+'px'; cur.style.opacity='1';
+    tip.style.left=Math.min(rect.width-4,Math.max(4,leftPx))+'px'; tip.style.opacity='1';
+    tip.textContent=`${xPct.toFixed(0)}%  ·  difficulty ${(y*100).toFixed(0)}%`;
+  });
+  chart.addEventListener('mouseleave',()=>{ cur.style.opacity='0'; tip.style.opacity='0'; });
+}
+
 // ---- main recompute --------------------------------------------------------
 function recompute(){
   if(!restoring) updateHash();
@@ -229,9 +334,11 @@ function recompute(){
     inputs=readManual(T);
     $('manTotal').textContent=inputs.length;
   }
+  // keep the full (pre-slice) manual list for the difficulty profile
+  const fullInputs = mode==='manual' ? inputs.slice() : [];
 
   // apply run / segment slice
-  let Teff=T, runActive=false, runValid=true, rangeLabel='';
+  let Teff=T, runActive=false, runValid=true, rangeLabel='', runLoPct=0, runHiPct=0;
   const runHint=$('runHint');
   if($('runOn').checked){
     const rng=parseRange($('runRange').value);
@@ -242,6 +349,7 @@ function recompute(){
       if(hi>lo){
         inputs=sliceRun(inputs,lo,hi);
         Teff=hi-lo; runActive=true;
+        runLoPct=lo/T*100; runHiPct=hi/T*100;
         rangeLabel=`${lo.toFixed(2)}–${hi.toFixed(2)}s`;
         const loP=(lo/T*100), hiP=(hi/T*100);
         runHint.className='totline';
@@ -254,6 +362,9 @@ function recompute(){
   } else {
     runHint.className='totline'; runHint.textContent='Off — the whole level is scored.';
   }
+
+  // difficulty profile reflects the whole level (manual mode), independent of target/fps validity
+  renderDifficulty(fullInputs, T, {active:runActive, loPct:runLoPct, hiPct:runHiPct});
 
   const stats=$('stats'), big=$('lstar'), rsub=$('rsub');
   const show=(msg)=>{big.textContent='—'; rsub.className='rsub msg'; rsub.textContent=msg; stats.style.display='none'; $('breakdown').classList.add('hidden');};
@@ -306,6 +417,7 @@ function serialize(){
     c:[$('cpsOn').checked?1:0, $('cpsK').value],
     h:hist, r:rows,
     run:[$('runOn').checked?1:0, $('runRange').value],
+    sm:$('smooth').value,
   };
 }
 function updateHash(){
@@ -334,6 +446,7 @@ function restore(){
     (st.r||[]).forEach(([t,w])=>addRow(t,w));
     // run
     if(st.run){ $('runOn').checked=!!st.run[0]; $('runRange').value=st.run[1]??''; }
+    if(st.sm!=null) $('smooth').value=st.sm;
     // apply unit + mode UI directly (no value conversion — values are stored as displayed)
     applyUnitUI(st.u==='pct'?'pct':'sec');
     applyModeUI(st.m==='manual'?'manual':'hist');

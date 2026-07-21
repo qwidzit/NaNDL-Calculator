@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { erf, passProb, histInputs, evaluate, solveLstar, perInputStats, sliceRun } from "../js/calc.js";
+import { erf, passProb, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile } from "../js/calc.js";
 
 // Shared setup from spec §6: f=240, T=60s, target=24h, modifiers off unless noted.
 const F = 240;
@@ -130,4 +130,21 @@ test("sliceRun: filters to [start,end] and re-bases to 0", () => {
   assert.deepEqual(seg.map(s => s.k), [5, 8, 4], "windows preserved, sorted by time");
   // order-independent of start/end argument order
   assert.deepEqual(sliceRun(inputs, 81.8, 23.2).map(s => s.t), seg.map(s => s.t));
+});
+
+test("difficultyProfile: peak sits at the tightest input, normalized to 1", () => {
+  const inputs = [ { t: 20, k: 2 }, { t: 80, k: 20 } ]; // T=100 -> positions 20%, 80%
+  const p = difficultyProfile(inputs, 100, { bandwidthPct: 3, samples: 200 });
+  assert.ok(Math.abs(p.peakXPct - 20) <= 4, `peak ~20%, got ${p.peakXPct}`);
+  approxRel(Math.max(...p.ys), 1, 1e-9, "normalized to 1");
+  assert.ok(p.ys.every(v => v >= 0 && v <= 1 + 1e-9), "ys in [0,1]");
+});
+
+test("difficultyProfile: more smoothing spreads difficulty outward", () => {
+  const inputs = [ { t: 20, k: 2 } ]; // single tight spike at 20%
+  const at = (p, x) => p.ys[Math.round(x / p.xmax * 200)];
+  const sharp  = difficultyProfile(inputs, 100, { bandwidthPct: 2,  samples: 200 });
+  const smooth = difficultyProfile(inputs, 100, { bandwidthPct: 15, samples: 200 });
+  assert.ok(at(smooth, 60) > at(sharp, 60),
+    `smooth@60 (${at(smooth,60)}) should exceed sharp@60 (${at(sharp,60)})`);
 });

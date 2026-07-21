@@ -138,3 +138,31 @@ export function sliceRun(inputs,startSec,endSec){
     .map(inp=>({t: inp.t-lo, k: inp.k}))
     .sort((a,b)=>a.t-b.t);
 }
+
+// Estimate a smooth "difficulty across the level" curve (for manual mode).
+// Each input contributes difficulty d = 1/window (tighter window = harder) at its
+// position x% = t/T. The curve at each sampled x is a Gaussian-kernel sum of those
+// contributions, so it rises where windows are tight and/or inputs are clustered,
+// and falls to ~0 in empty stretches. `bandwidthPct` (from the smoothness slider)
+// is the kernel width in % units — larger = smoother. ys are normalized to [0,1].
+// fps is irrelevant to the shape (a global constant), so it isn't needed here.
+export function difficultyProfile(inputs, T, opts={}){
+  const samples = opts.samples || 240;
+  const h = Math.max(0.3, opts.bandwidthPct || 4);   // % bandwidth, floored
+  const pts = [];
+  if(T>0) for(const i of inputs){ if(i.k>0) pts.push({x: i.t/T*100, d: 1/i.k}); }
+  const xmax = Math.max(100, ...pts.map(p=>p.x), 0);
+  const xs = new Array(samples+1), ys = new Array(samples+1);
+  const norm = 1/(h*Math.sqrt(2*Math.PI));
+  let maxAbs = 0, peakX = 0;
+  for(let j=0;j<=samples;j++){
+    const x = xmax*j/samples;
+    let g = 0;
+    for(const p of pts){ const z=(x-p.x)/h; g += p.d*norm*Math.exp(-0.5*z*z); }
+    xs[j]=x; ys[j]=g;
+    if(g>maxAbs){ maxAbs=g; peakX=x; }
+  }
+  const inv = maxAbs>0 ? 1/maxAbs : 0;
+  for(let j=0;j<=samples;j++) ys[j]*=inv;
+  return { xs, ys, xmax, peakXPct: peakX, maxAbs, count: pts.length };
+}

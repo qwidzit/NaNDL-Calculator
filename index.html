@@ -111,6 +111,7 @@
         <button class="btn2" id="importBtn">&#8593; Import .txt</button>
         <button class="btn2" id="exportBtn">&#8595; Export .txt</button>
         <button class="btn2 ghost" id="guideBtn">Format guide</button>
+        <button class="btn2 danger" id="clearBtn">Clear all</button>
         <input type="file" id="fileInput" accept=".txt,text/plain" style="display:none">
         <span class="imstatus" id="imStatus"></span>
       </div>
@@ -177,6 +178,22 @@
     </div>
   </div>
 
+  <div class="panel hidden" id="diffPanel">
+    <h2>Difficulty profile <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— estimated difficulty across the level (manual mode)</span></h2>
+    <div class="diffhead">
+      <label for="smooth">Smoothing</label>
+      <input type="range" id="smooth" min="0.5" max="25" step="0.5" value="4">
+      <span class="imstatus" id="smoothVal">4.0%</span>
+    </div>
+    <div class="chartwrap" id="diffChart">
+      <div id="diffSvg"></div>
+      <div class="axis" id="diffAxis"></div>
+      <div class="diffcursor" id="diffCursor"></div>
+      <div class="difftip" id="diffTip"></div>
+    </div>
+    <div class="totline" id="diffCaption"></div>
+  </div>
+
   <details id="breakdown" class="hidden">
     <summary>Per-input breakdown <span id="bdCount" style="color:var(--muted);font-weight:400"></span></summary>
     <div class="body">
@@ -232,6 +249,17 @@
       tunable placeholders because the NaNDL site does not publish its calibrated values.</p>
     </div>
   </details>
+
+  <div class="overlay" id="confirmModal">
+    <div class="modal">
+      <h3>Clear all inputs?</h3>
+      <p>This removes all <b id="confirmCount">0</b> input(s) from the manual list. This can&rsquo;t be undone.</p>
+      <div class="modalbtns">
+        <button class="btn2 ghost" id="confirmCancel">Cancel</button>
+        <button class="btn2 danger" id="confirmClear">Clear all</button>
+      </div>
+    </div>
+  </div>
 
   <div class="overlay" id="guideModal">
     <div class="modal">

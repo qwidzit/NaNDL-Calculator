@@ -43,6 +43,9 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 | **fps presets + validation** (Step 6) | Setup panel | 120 / 240 / 480 quick-select; blocks fps ≤ 0, warns on non-integer fps. |
 | **Manual `.txt` export** | Export button | Mirrors the import format (`time - window`), so round-trips with Import. |
 | **Run / segment** | `sliceRun()` + Run panel | A range like `23.2 - 81.8` scores only that slice as its own level (inputs re-based to start at 0, length = to − from). Range respects the Seconds/% switch; the hint and breakdown show **both units**. |
+| **Clear all + confirm** | manual tools + confirm modal | "Clear all" empties the manual list behind a confirm popup ("This can't be undone", input count shown); Esc/Cancel/backdrop dismiss. |
+| **Difficulty profile** | `difficultyProfile()` + SVG chart | Manual mode only: a smooth difficulty curve across the level (Gaussian-kernel over input positions; difficulty = 1/window). Gradient fill, peak marker, hover readout (`x% · difficulty`), and the active run region shaded. |
+| **Smoothing slider** | `#smooth` range | Controls the difficulty curve's kernel bandwidth (0.5–25%, default 4%); persisted in the share link. |
 | **Offline** | `sw.js` + `manifest.webmanifest` | Service worker caches all first-party assets; the app runs with no network after first load. "offline-ready" badge appears once cached. |
 
 **Offline & storage note:** the only persistence is the service-worker **asset** cache
@@ -61,9 +64,10 @@ bump `CACHE` in `sw.js` (cache-first otherwise keeps the cached copy).
 ├── js/
 │   ├── calc.js              # PURE math ES module: erf, passProb, buildSequence,
 │   │                        #   histInputs, localCps, evaluate, solveLstar,
-│   │                        #   perInputStats, sliceRun, MAXW
-│   └── app.js               # UI: input modes, run/segment, breakdown, fps presets,
-│                            #   import/export, URL state, service-worker registration
+│   │                        #   perInputStats, sliceRun, difficultyProfile, MAXW
+│   └── app.js               # UI: input modes, run/segment, breakdown, difficulty
+│                            #   chart, clear/confirm, fps presets, import/export,
+│                            #   URL state, service-worker registration
 ├── sw.js                    # offline service worker (cache-first, versioned)
 ├── manifest.webmanifest     # PWA manifest (offline / installable)
 ├── tests/calc.test.js       # spec §6 regression + helper tests (`npm test`)
