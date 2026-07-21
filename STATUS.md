@@ -41,10 +41,10 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 | **URL-shareable state** (Step 4) | `js/app.js` | Whole UI encoded in the `#s=` hash (base64 JSON); **Copy shareable link** button. No browser storage — state lives in the link. |
 | **Per-input breakdown** (Step 5) | `perInputStats()` + breakdown table | Each input's `p`/`reach` at L\*, time in **both seconds and %**, weakest inputs flagged & color-coded. |
 | **fps presets + validation** (Step 6) | Setup panel | 120 / 240 / 480 quick-select; blocks fps ≤ 0, warns on non-integer fps. |
-| **Manual `.txt` export** | Export button | Mirrors the import format (`time - window`), so round-trips with Import. |
+| **`.txt` import / export** | `parseInputsText()` + Import/Export | Import accepts each line as `time`/`window` separated by a **dash, a tab, or spaces** (so spreadsheet-pasted `0.55⇥3` works alongside `1.5 - 3`); export mirrors the `time - window` form and round-trips. |
 | **Run / segment** | `sliceRun()` + Run panel | A range like `23.2 - 81.8` scores only that slice as its own level (inputs re-based to start at 0, length = to − from). Range respects the Seconds/% switch; the hint and breakdown show **both units**. |
 | **Clear all + confirm** | manual tools + confirm modal | "Clear all" empties the manual list behind a confirm popup ("This can't be undone", input count shown); Esc/Cancel/backdrop dismiss. |
-| **Difficulty profile** | `difficultyProfile()` + SVG chart | Manual mode only: a smooth difficulty curve across the level (Gaussian-kernel over input positions; difficulty = 1/window). Gradient fill, peak marker, hover readout (`x% · difficulty`), and the active run region shaded. |
+| **Difficulty profile** | `difficultyProfile()` + SVG chart | Manual mode only: a smooth difficulty curve across the level (Gaussian-kernel over input positions; difficulty = 1/(window·λ), where λ is the enabled modifiers' multiplier — so **modifiers reshape the curve**). Gradient fill, peak marker, hover readout (`x% · difficulty`), active run region shaded, "Modifiers applied" note when any is on. |
 | **Smoothing slider** | `#smooth` range | Controls the difficulty curve's kernel bandwidth (0.5–25%, default 4%); persisted in the share link. |
 | **Offline** | `sw.js` + `manifest.webmanifest` | Service worker caches all first-party assets; the app runs with no network after first load. "offline-ready" badge appears once cached. |
 

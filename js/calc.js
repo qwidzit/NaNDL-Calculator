@@ -140,17 +140,30 @@ export function sliceRun(inputs,startSec,endSec){
 }
 
 // Estimate a smooth "difficulty across the level" curve (for manual mode).
-// Each input contributes difficulty d = 1/window (tighter window = harder) at its
-// position x% = t/T. The curve at each sampled x is a Gaussian-kernel sum of those
-// contributions, so it rises where windows are tight and/or inputs are clustered,
-// and falls to ~0 in empty stretches. `bandwidthPct` (from the smoothness slider)
-// is the kernel width in % units — larger = smoother. ys are normalized to [0,1].
-// fps is irrelevant to the shape (a global constant), so it isn't needed here.
-export function difficultyProfile(inputs, T, opts={}){
+// Each input contributes difficulty d = 1/(window · λ) at its position x% = t/T,
+// where λ is the product of the enabled modifier multipliers (same λ evaluate()
+// applies to the sigma value) — so a modifier that tightens the effective window
+// (λ < 1) raises that input's difficulty. The curve at each sampled x is a
+// Gaussian-kernel sum of those contributions, so it rises where windows are tight
+// and/or inputs are clustered, and falls to ~0 in empty stretches. `bandwidthPct`
+// (from the smoothness slider) is the kernel width in % units — larger = smoother.
+// ys are normalized to [0,1]. fps cancels under normalization, so it isn't needed.
+// `inputs` must be sorted ascending by t (fatigue/CPS depend on index & gaps).
+export function difficultyProfile(inputs, T, mods, opts={}){
   const samples = opts.samples || 240;
   const h = Math.max(0.3, opts.bandwidthPct || 4);   // % bandwidth, floored
+  const m = mods || { nerve:{on:false}, fatigue:{on:false}, cps:{on:false} };
   const pts = [];
-  if(T>0) for(const i of inputs){ if(i.k>0) pts.push({x: i.t/T*100, d: 1/i.k}); }
+  if(T>0) for(let i=0;i<inputs.length;i++){
+    const inp=inputs[i];
+    if(!(inp.k>0)) continue;
+    let lambda=1;
+    if(m.nerve   && m.nerve.on)   lambda *= Math.exp(-m.nerve.k*inp.t);
+    if(m.fatigue && m.fatigue.on) lambda *= Math.exp(-m.fatigue.k*(i+1));
+    if(m.cps     && m.cps.on){ const c=localCps(inputs,i,T); lambda *= Math.pow(4/Math.max(1,2*c), m.cps.k); }
+    if(!(lambda>0)) lambda=1e-9;
+    pts.push({x: inp.t/T*100, d: (1/inp.k)/lambda});
+  }
   const xmax = Math.max(100, ...pts.map(p=>p.x), 0);
   const xs = new Array(samples+1), ys = new Array(samples+1);
   const norm = 1/(h*Math.sqrt(2*Math.PI));
@@ -165,4 +178,17 @@ export function difficultyProfile(inputs, T, opts={}){
   const inv = maxAbs>0 ? 1/maxAbs : 0;
   for(let j=0;j<=samples;j++) ys[j]*=inv;
   return { xs, ys, xmax, peakXPct: peakX, maxAbs, count: pts.length };
+}
+
+// Parse a pasted/imported list into [[time, window], …]. Each line is a number
+// pair separated by a dash (spaces optional) OR by a tab / spaces — so both
+// "1.5 - 3" and spreadsheet-style "0.55\t3" or "10 4" work. Blank/garbage lines
+// (anything without a valid number pair) are skipped.
+export function parseInputsText(text){
+  const out=[];
+  String(text).split(/\r?\n/).forEach(line=>{
+    const m=line.match(/(-?\d*\.?\d+)(?:\s*-\s*|\s+)(\d*\.?\d+)/);
+    if(m){ const t=parseFloat(m[1]), w=parseFloat(m[2]); if(!isNaN(t)&&!isNaN(w)) out.push([t,w]); }
+  });
+  return out;
 }

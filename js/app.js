@@ -5,7 +5,7 @@
 // offline service worker. No browser storage — sharable state lives in the URL.
 // ============================================================================
 
-import { MAXW, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile } from "./calc.js";
+import { MAXW, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile, parseInputsText } from "./calc.js";
 
 let mode="hist";
 let unit="sec";
@@ -103,11 +103,7 @@ fileInput.addEventListener('change',e=>{
 });
 function importText(text){
   const status=$('imStatus');
-  const parsed=[];
-  text.split(/\r?\n/).forEach(line=>{
-    const m=line.match(/(-?\d*\.?\d+)\s*-\s*(\d*\.?\d+)/);
-    if(m){ const t=parseFloat(m[1]), w=parseFloat(m[2]); if(!isNaN(t)&&!isNaN(w)) parsed.push([t,w]); }
-  });
+  const parsed=parseInputsText(text);
   if(parsed.length===0){
     status.style.color='var(--warn)';
     status.textContent='No valid "time - window" lines found — see the format guide.';
@@ -174,6 +170,14 @@ function parseRange(str){
   const a=parseFloat(m[1]), b=parseFloat(m[2]);
   return (isNaN(a)||isNaN(b)) ? null : [a,b];
 }
+function readMods(){
+  return {
+    nerve:{on:$('nerveOn').checked, k:num('nerveK')},
+    fatigue:{on:$('fatigueOn').checked, k:num('fatigueK')},
+    cps:{on:$('cpsOn').checked, k:num('cpsK')},
+  };
+}
+function anyModOn(m){ return m.nerve.on || m.fatigue.on || m.cps.on; }
 function readManual(T){
   const rows=[...document.querySelectorAll('#manualBody tr')];
   const inputs=[];
@@ -229,7 +233,8 @@ function renderDifficulty(inputs,T,run){
   if(mode!=='manual' || !(T>0) || inputs.length===0){ panel.classList.add('hidden'); lastProfile=null; return; }
   const h=parseFloat($('smooth').value)||4;
   $('smoothVal').textContent=h.toFixed(1)+'%';
-  const prof=difficultyProfile(inputs,T,{bandwidthPct:h,samples:240});
+  const mods=readMods();
+  const prof=difficultyProfile(inputs,T,mods,{bandwidthPct:h,samples:240});
   panel.classList.remove('hidden');
 
   const W=1000,H=200,padL=6,padR=6,padT=10,padB=6;
@@ -283,8 +288,9 @@ function renderDifficulty(inputs,T,run){
   const tight=inputs.reduce((a,b)=> b.k<a.k?b:a, inputs[0]);
   const f=num('fps');
   const tightMs=f>0 ? (1000*tight.k/f).toFixed(1)+' ms' : '—';
+  const modNote=anyModOn(mods) ? ` <span style="color:var(--accent)">Modifiers applied.</span>` : '';
   $('diffCaption').innerHTML=`Relative difficulty across the level — higher = tighter windows and/or denser inputs. `+
-    `Hardest around <b>${prof.peakXPct.toFixed(0)}%</b>; tightest window <b>${tight.k}f</b> (~${tightMs}).`;
+    `Hardest around <b>${prof.peakXPct.toFixed(0)}%</b>; tightest window <b>${tight.k}f</b> (~${tightMs}).${modNote}`;
 
   lastProfile={xs:prof.xs, ys:prof.ys, xmax:prof.xmax};
 }
@@ -375,11 +381,7 @@ function recompute(){
   if(inputs.length===0) return show(runActive?'No inputs fall inside the run range.':'Add at least one input.');
   if(!(targetH>0)) return show('Enter a target time greater than 0.');
 
-  const mods={
-    nerve:{on:$('nerveOn').checked, k:num('nerveK')},
-    fatigue:{on:$('fatigueOn').checked, k:num('fatigueK')},
-    cps:{on:$('cpsOn').checked, k:num('cpsK')},
-  };
+  const mods=readMods();
   const cfg={inputs, f, T:Teff, mods};
   const targetSec=targetH*3600;
   const Lstar=solveLstar(cfg,targetSec);
