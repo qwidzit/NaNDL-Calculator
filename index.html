@@ -273,7 +273,7 @@
 5.5 - 8
 8.1 - 11
 10 - 4</pre>
-      <p><b>time</b> is the input's position and <b>window</b> is its size in frames. Separate them with a dash, a tab, or spaces — <code>1.5 - 3</code>, <code>1.5-3</code>, and tab/space-separated pairs pasted from a spreadsheet (e.g. <code>0.55&#9;3</code>) all work.</p>
+      <p><b>time</b> is the input's position and <b>window</b> is its size in frames. Separate them with a dash, a tab, or spaces — <code>1.5 - 3</code>, <code>1.5-3</code>, <code>35.29 - 5f</code>, and tab/space-separated pairs pasted from a spreadsheet (e.g. <code>0.55&#9;3</code>) all work. A trailing <code>f</code> (or any unit label, like <code>frames</code>) is ignored.</p>
       <p>Time is read in whatever the <b>Seconds / %</b> switch is set to at import — so the same file loads as absolute seconds in Seconds mode, or as percentages of the level length in % mode. <b>Export .txt</b> writes the current list back out in this same format.</p>
       <p>Blank lines and anything that isn't a <code>number - number</code> pair are skipped. Importing <b>replaces</b> the current list.</p>
     </div>

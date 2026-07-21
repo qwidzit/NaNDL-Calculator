@@ -176,3 +176,11 @@ test("parseInputsText: accepts dash, tab, and space separators", () => {
   // blank / header / garbage lines are skipped
   assert.deepEqual(parseInputsText("time window\n\n0.55\t3\n---"), [[0.55, 3]]);
 });
+
+test("parseInputsText: ignores unit labels like a frames suffix", () => {
+  assert.deepEqual(parseInputsText("35.29 - 5f"), [[35.29, 5]]);          // the asked format
+  assert.deepEqual(parseInputsText("35.29-5f\n0.55\t3f\n2.4 19f"),
+    [[35.29, 5], [0.55, 3], [2.4, 19]]);                                   // f suffix, all separators
+  assert.deepEqual(parseInputsText("35.29 - 5 frames"), [[35.29, 5]]);    // word unit
+  assert.deepEqual(parseInputsText("35.29s - 5f"), [[35.29, 5]]);         // unit on the time too
+});

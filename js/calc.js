@@ -181,13 +181,14 @@ export function difficultyProfile(inputs, T, mods, opts={}){
 }
 
 // Parse a pasted/imported list into [[time, window], …]. Each line is a number
-// pair separated by a dash (spaces optional) OR by a tab / spaces — so both
-// "1.5 - 3" and spreadsheet-style "0.55\t3" or "10 4" work. Blank/garbage lines
-// (anything without a valid number pair) are skipped.
+// pair separated by a dash (spaces optional) OR by a tab / spaces — so "1.5 - 3",
+// spreadsheet-style "0.55\t3", and "10 4" all work. An optional unit label on
+// either number is ignored, so "35.29 - 5f" (5 frames) and "35.29s - 5 frames"
+// read as [35.29, 5]. Blank/garbage lines (no valid number pair) are skipped.
 export function parseInputsText(text){
   const out=[];
   String(text).split(/\r?\n/).forEach(line=>{
-    const m=line.match(/(-?\d*\.?\d+)(?:\s*-\s*|\s+)(\d*\.?\d+)/);
+    const m=line.match(/(-?\d*\.?\d+)[a-zA-Z%]*(?:\s*-\s*|\s+)(\d*\.?\d+)/);
     if(m){ const t=parseFloat(m[1]), w=parseFloat(m[2]); if(!isNaN(t)&&!isNaN(w)) out.push([t,w]); }
   });
   return out;
