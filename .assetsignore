@@ -1,0 +1,12 @@
+# Files in the repo root that must NOT be uploaded as Cloudflare static assets.
+# Primary fix for "Asset too large": the build installs wrangler, whose
+# node_modules/workerd binary is 122 MiB and exceeds the 25 MiB per-asset limit.
+node_modules
+
+# Dev-only files — kept in the repo (and git) but not part of the deployed site.
+package.json
+package-lock.json
+tests/
+*.md
+nandl_calculator_2.html
+.assetsignore

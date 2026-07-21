@@ -58,10 +58,16 @@ This repo is the deployable output as-is (no build step).
 3. Deploy. `_headers` (security + service-worker caching) and `404.html` are picked up
    automatically because they sit in the output root.
 
-### Set your domain (important for SEO)
+Because the output directory is the repo root, [`.assetsignore`](.assetsignore) excludes
+`node_modules/` (the build installs `wrangler`, whose `workerd` binary is >25 MiB and would
+otherwise fail the upload with *"Asset too large"*) plus the dev-only files (docs, prototype,
+tests). The deployed site is just the app assets.
 
-The SEO files use `https://nandl-calculator.pages.dev` as a **placeholder**. If your
-Pages project name or custom domain differs, replace it everywhere:
+### Domain
+
+The site's origin is `https://nandl-calculator.pages.dev`, wired into `index.html`
+(canonical, Open Graph, JSON-LD), `robots.txt`, and `sitemap.xml`. If you move to a
+different/custom domain, update it everywhere:
 
 ```bash
 # from the repo root — swap in your real origin (no trailing slash)
@@ -91,6 +97,7 @@ manifest.webmanifest    PWA manifest
 tests/calc.test.js      regression tests (npm test)
 robots.txt, sitemap.xml SEO / crawler config
 _headers                Cloudflare Pages response headers
+.assetsignore           files excluded from the Cloudflare assets upload (node_modules, dev files)
 404.html                themed not-found page
 favicon.svg, og-image.png   icon + social preview
 nandl_calculator_2.html original single-file prototype (reference only)

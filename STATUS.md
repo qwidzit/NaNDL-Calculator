@@ -23,9 +23,10 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 - ✅ **Deployment assets added** — `README.md`, SEO metadata (Open Graph + Twitter card +
   JSON-LD), `robots.txt`, `sitemap.xml`, `favicon.svg`, `og-image.png`, a themed `404.html`,
   and Cloudflare `_headers`. Ready to publish.
-- ⏳ **Publishing** — the owner is setting up **Cloudflare Pages** (no build step; output
-  dir = repo root). Remaining manual step: replace the placeholder domain
-  `nandl-calculator.pages.dev` if a custom domain is used (see README).
+- ⏳ **Publishing** — the owner is setting up **Cloudflare Pages** at
+  `nandl-calculator.pages.dev` (no build step; output dir = repo root). A `.assetsignore`
+  excludes `node_modules/` so the build's `wrangler`/`workerd` binary doesn't trip the
+  25 MiB per-asset limit ("Asset too large").
 - 🗂️ `nandl_calculator_2.html` — the original single-file prototype, kept for reference
   only. **It predates the new features**; the live app is `index.html` + the modules.
 
