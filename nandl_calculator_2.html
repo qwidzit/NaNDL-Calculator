@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NaNDL Precision Calculator</title>
+<style>
+  :root{
+    --bg:#0d1017; --panel:#151a23; --panel2:#1b212c; --line:#2a3341;
+    --txt:#e7ecf3; --muted:#8b97a8; --accent:#5ed0c6; --accent2:#7aa2ff;
+    --warn:#f0a35e; --good:#6ee7a8; --broke:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:radial-gradient(1200px 600px at 70% -10%, #182234 0%, var(--bg) 55%);
+    color:var(--txt); font-family:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;
+    line-height:1.5; padding:28px 16px 80px;
+  }
+  .wrap{max-width:880px; margin:0 auto}
+  h1{font-size:26px; margin:0 0 2px; letter-spacing:.5px}
+  .sub{color:var(--muted); font-size:13px; margin-bottom:22px}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:18px}
+  .panel h2{font-size:14px; text-transform:uppercase; letter-spacing:1px; color:var(--accent); margin:0 0 14px}
+  label{font-size:13px; color:var(--muted)}
+  input[type=number]{
+    background:var(--panel2); border:1px solid var(--line); color:var(--txt);
+    border-radius:8px; padding:8px 10px; font-size:14px; width:100%;
+  }
+  input[type=number]:focus{outline:none; border-color:var(--accent2)}
+  .row{display:flex; gap:16px; flex-wrap:wrap}
+  .field{flex:1; min-width:150px}
+  .field .hint{font-size:11px; color:var(--muted); margin-top:3px}
+  .grid{display:grid; grid-template-columns:repeat(5,1fr); gap:10px}
+  .cell{background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:8px}
+  .cell label{display:block; font-size:11px; margin-bottom:4px; color:var(--muted)}
+  .cell .win{color:var(--accent2); font-weight:600}
+  .cell .ms{font-size:10px; color:#5b6675}
+
+  /* segmented control */
+  .seg{display:inline-flex; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:3px; gap:3px}
+  .seg button{background:transparent; border:none; color:var(--muted); padding:7px 16px; border-radius:8px; font-size:13px; cursor:pointer; font-family:inherit}
+  .seg button.active{background:var(--accent); color:#08201d; font-weight:600}
+
+  /* modifiers */
+  .modrow{display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--line)}
+  .modrow:first-of-type{border-top:none}
+  .modrow .name{flex:1}
+  .modrow .name b{display:inline-block; font-size:14px}
+  .modrow .name .desc{display:block; font-size:11px; color:var(--muted)}
+  .modrow .kf{width:130px}
+  .modrow .kf label{font-size:10px}
+  .badge{display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.5px; color:#2a0d0d;
+    background:var(--broke); border-radius:5px; padding:1px 6px; margin-left:7px; vertical-align:middle}
+  .switch{position:relative; width:44px; height:24px; flex:0 0 auto}
+  .switch input{opacity:0; width:0; height:0}
+  .slider{position:absolute; inset:0; background:#333c4a; border-radius:24px; transition:.2s; cursor:pointer}
+  .slider:before{content:""; position:absolute; height:18px; width:18px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s}
+  .switch input:checked + .slider{background:var(--accent)}
+  .switch input:checked + .slider:before{transform:translateX(20px)}
+
+  /* manual list */
+  .mhead{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; gap:12px; flex-wrap:wrap}
+  table.manual{width:100%; border-collapse:collapse}
+  table.manual th{font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); text-align:left; padding:4px 8px; font-weight:600}
+  table.manual td{padding:4px 8px}
+  table.manual input{width:100%}
+  .del{background:#2a1c1c; border:1px solid #4a2b2b; color:#ff8a8a; border-radius:8px; padding:7px 10px; cursor:pointer; font-size:13px; width:100%}
+  .del:hover{background:#3a2424}
+  .addbtn{background:var(--panel2); border:1px dashed var(--line); color:var(--accent2); border-radius:8px; padding:9px 14px; cursor:pointer; font-size:13px; margin-top:10px; width:100%}
+  .addbtn:hover{border-color:var(--accent2)}
+  .unitcell{width:70px; text-align:center; color:var(--accent); font-size:13px}
+
+  .mtools{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px}
+  .btn2{background:var(--panel2); border:1px solid var(--line); color:var(--accent2); border-radius:8px; padding:8px 14px; cursor:pointer; font-size:13px; font-family:inherit}
+  .btn2:hover{border-color:var(--accent2)}
+  .btn2.ghost{color:var(--muted)}
+  .imstatus{font-size:12px; color:var(--muted)}
+  .overlay{position:fixed; inset:0; background:rgba(4,7,12,.72); display:none; align-items:center; justify-content:center; padding:20px; z-index:50}
+  .overlay.show{display:flex}
+  .modal{background:var(--panel); border:1px solid var(--line); border-radius:14px; max-width:520px; width:100%; padding:22px 24px; box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .modal h3{margin:0 0 6px; font-size:17px; color:var(--txt)}
+  .modal p{font-size:13px; color:#c4cdda; margin:8px 0}
+  .modal pre{background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:12px; font-size:12.5px; color:var(--good); overflow:auto; margin:10px 0; line-height:1.5}
+  .modal .close{float:right; background:none; border:none; color:var(--muted); font-size:22px; cursor:pointer; line-height:1; margin:-4px -6px 0 0}
+  .modal code{background:var(--panel2); padding:1px 6px; border-radius:5px; color:var(--good)}
+
+  .result{
+    background:linear-gradient(135deg,#16303a,#131b27); border:1px solid #234a52;
+    border-radius:16px; padding:24px; text-align:center;
+  }
+  .result .rlabel{font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color:var(--accent)}
+  .result .big{font-size:52px; font-weight:700; margin:6px 0 2px; color:#fff; font-variant-numeric:tabular-nums}
+  .result .rsub{color:var(--muted); font-size:13px; max-width:520px; margin:6px auto 0}
+  .stats{display:flex; justify-content:center; gap:26px; flex-wrap:wrap; margin-top:18px}
+  .stat{min-width:110px}
+  .stat .v{font-size:18px; font-weight:600; color:var(--accent2); font-variant-numeric:tabular-nums}
+  .stat .l{font-size:11px; color:var(--muted)}
+  .msg{color:var(--warn); font-size:14px}
+  details{margin-top:8px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:6px 20px}
+  details summary{cursor:pointer; padding:12px 0; font-size:13px; color:var(--accent); font-weight:600; list-style:none}
+  details summary::-webkit-details-marker{display:none}
+  details .body{font-size:13px; color:#c4cdda; padding-bottom:16px}
+  details .body code{background:var(--panel2); padding:1px 6px; border-radius:5px; color:var(--good); font-size:12.5px}
+  details .body h4{color:var(--accent2); margin:16px 0 6px; font-size:13px}
+  .totline{font-size:12px; color:var(--muted); margin-top:12px}
+  .totline b{color:var(--txt)}
+  .hidden{display:none}
+  a{color:var(--accent2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>NaNDL Precision Calculator</h1>
+  <div class="sub">Read off the precision needed to average a target-time completion — from a frame-window histogram, or from an exact list of timed inputs.</div>
+
+  <div class="panel">
+    <h2>Setup</h2>
+    <div class="row">
+      <div class="field">
+        <label>Frame rate (fps)</label>
+        <input type="number" id="fps" value="240" min="1" step="1">
+        <div class="hint">1 frame = 1/fps seconds</div>
+      </div>
+      <div class="field">
+        <label>Level length (seconds)</label>
+        <input type="number" id="tlen" value="60" min="0.1" step="0.5">
+        <div class="hint">total level time; also used for % positions</div>
+      </div>
+      <div class="field">
+        <label>Target time (hours)</label>
+        <input type="number" id="target" value="24" min="0.001" step="1">
+        <div class="hint">precision is solved for this expected time</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Input mode</h2>
+    <div class="seg" id="modeSeg">
+      <button data-mode="hist" class="active">Histogram</button>
+      <button data-mode="manual">Manual list</button>
+    </div>
+
+    <!-- histogram -->
+    <div id="histPanel" style="margin-top:16px">
+      <div class="grid" id="grid"></div>
+      <div class="totline">Total inputs: <b id="histTotal">0</b> &nbsp;·&nbsp; evenly spread across the level</div>
+    </div>
+
+    <!-- manual -->
+    <div id="manualPanel" class="hidden" style="margin-top:16px">
+      <div class="mhead">
+        <div style="font-size:12px;color:var(--muted)">Add each input with its position and window. Ordering &amp; gaps come straight from your list.</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;color:var(--muted)">Time in</span>
+          <div class="seg" id="unitSeg">
+            <button data-unit="sec" class="active">Seconds</button>
+            <button data-unit="pct">%</button>
+          </div>
+        </div>
+      </div>
+      <div class="mtools">
+        <button class="btn2" id="importBtn">&#8593; Import .txt</button>
+        <button class="btn2 ghost" id="guideBtn">Format guide</button>
+        <input type="file" id="fileInput" accept=".txt,text/plain" style="display:none">
+        <span class="imstatus" id="imStatus"></span>
+      </div>
+      <table class="manual">
+        <thead><tr>
+          <th style="width:34%">Time (<span id="unitLabelHead">s</span>)</th>
+          <th style="width:34%">Window (frames)</th>
+          <th style="width:20%">ms</th>
+          <th style="width:12%"></th>
+        </tr></thead>
+        <tbody id="manualBody"></tbody>
+      </table>
+      <button class="addbtn" id="addRow">+ Add input</button>
+      <div class="totline">Total inputs: <b id="manTotal">0</b></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Modifiers <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— off by default; constants are placeholders (the site does not publish them)</span></h2>
+
+    <div class="modrow">
+      <label class="switch"><input type="checkbox" id="nerveOn"><span class="slider"></span></label>
+      <div class="name"><b>Nerve</b><span class="desc">&lambda; = e^(&minus;k&middot;t): later inputs (in seconds) are shakier</span></div>
+      <div class="kf"><label>k_t (per sec)</label><input type="number" id="nerveK" value="0.0015" step="0.0005" min="0"></div>
+    </div>
+
+    <div class="modrow">
+      <label class="switch"><input type="checkbox" id="fatigueOn"><span class="slider"></span></label>
+      <div class="name"><b>Fatigue</b><span class="badge">BROKEN?</span><span class="desc">&lambda; = e^(&minus;k&middot;i): later inputs (by index) degrade</span></div>
+      <div class="kf"><label>k_u (per input)</label><input type="number" id="fatigueK" value="0.00075" step="0.00025" min="0"></div>
+    </div>
+
+    <div class="modrow">
+      <label class="switch"><input type="checkbox" id="cpsOn"><span class="slider"></span></label>
+      <div class="name"><b>CPS</b><span class="badge">BROKEN?</span><span class="desc">&lambda; = (4 / max(1, 2c))^k: fast clicking hurts precision</span></div>
+      <div class="kf"><label>k_c (exponent)</label><input type="number" id="cpsK" value="2" step="0.25" min="0"></div>
+    </div>
+  </div>
+
+  <div class="result" id="result">
+    <div class="rlabel">Required Precision &nbsp;L*</div>
+    <div class="big" id="lstar">—</div>
+    <div class="rsub" id="rsub">Enter a level length and at least one input.</div>
+    <div class="stats" id="stats" style="display:none">
+      <div class="stat"><div class="v" id="sigma">—</div><div class="l">timing window &sigma; = 1/L*</div></div>
+      <div class="stat"><div class="v" id="pc">—</div><div class="l">P(C) per attempt at L*</div></div>
+      <div class="stat"><div class="v" id="etc">—</div><div class="l">expected time to complete</div></div>
+    </div>
+  </div>
+
+  <details>
+    <summary>How it works &amp; assumptions</summary>
+    <div class="body">
+      <p>Each input <i>i</i> has a window of <code>N&#8341;</code> frames, so its duration is
+      <code>w&#8341; = N&#8341; / fps</code> seconds. A player with precision <code>L</code> (bigger = sharper;
+      L&nbsp;=&nbsp;1/&sigma; of their timing error in seconds) clears that input if their timing lands inside the
+      half-window, giving <code>p&#8341; = erf( (&frac12;&middot;w&#8341;&middot;L) / &radic;2 )</code>.</p>
+
+      <h4>Level metrics</h4>
+      <p>Completion probability <code>P(C) = &prod; p&#8341;</code>. Reach probability
+      <code>r&#8341; = &prod;&#8323;&#8322;&#8339;&#8342; p&#8331;</code>. Expected time per attempt
+      <code>E[T&#8329;] = t&#8345;&middot;P(C) + &sum; t&#8341;&middot;r&#8341;&middot;q&#8341;</code> (<code>q&#8341;=1&minus;p&#8341;</code>,
+      <code>t&#8345;</code> = level length), and expected time to complete <code>E[T&#9557;] = E[T&#8329;] / P(C)</code>.
+      The tool bisects on <code>L</code> for <b>L*</b>, where <code>E[T&#9557;]</code> equals your target time.
+      It also shows <code>&sigma; = 1/L*</code> in milliseconds.</p>
+
+      <h4>Two input modes</h4>
+      <p><b>Histogram</b> — you give counts per frame-window size; the tool assumes inputs are evenly spaced across the
+      level and evenly interleaved by difficulty (no clustering). With modifiers off, the result depends only on the
+      histogram, level length and target.</p>
+      <p><b>Manual list</b> — you give each input's exact time and window, so ordering, gaps and per-input positions are
+      taken directly from your data (nothing is scattered evenly). The <b>Seconds / %</b> switch reads times either as
+      seconds or as a percentage of the level length, where % grows evenly across the level (50% = halfway in time).</p>
+
+      <h4>Modifiers</h4>
+      <p>Each enabled modifier multiplies an input's effective window before the probability is taken: <b>Nerve</b>
+      <code>e^(&minus;k&middot;t&#8341;)</code>, <b>Fatigue</b> <code>e^(&minus;k&middot;i)</code>, <b>CPS</b>
+      <code>(4/max(1,2c))^k</code> where <code>c</code> is the local clicks/sec from the gap to the previous input.
+      Fatigue and CPS are marked <span class="badge">BROKEN?</span> and all three are off by default; the constants are
+      tunable placeholders because the NaNDL site does not publish its calibrated values.</p>
+    </div>
+  </details>
+
+  <div class="overlay" id="guideModal">
+    <div class="modal">
+      <button class="close" id="guideClose">&times;</button>
+      <h3>Import format</h3>
+      <p>A plain <code>.txt</code> file, one input per line, written as <code>time - window</code>:</p>
+      <pre>1.5 - 3
+2.1 - 5
+2.9 - 15
+5.1 - 8
+5.5 - 8
+8.1 - 11
+10 - 4</pre>
+      <p><b>time</b> is the input's position and <b>window</b> is its size in frames. A dash separates them; spaces around the dash are optional (<code>1.5 - 3</code> and <code>1.5-3</code> both work).</p>
+      <p>Time is read in whatever the <b>Seconds / %</b> switch is set to at import — so the same file loads as absolute seconds in Seconds mode, or as percentages of the level length in % mode.</p>
+      <p>Blank lines and anything that isn't a <code>number - number</code> pair are skipped. Importing <b>replaces</b> the current list.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const MAXW = 20;
+
+function erf(x){
+  const z = Math.abs(x);
+  const t = 1/(1+0.5*z);
+  const ans = t*Math.exp(-z*z - 1.26551223 + t*(1.00002368 + t*(0.37409196 +
+    t*(0.09678418 + t*(-0.18628806 + t*(0.27886807 + t*(-1.13520398 +
+    t*(1.48851587 + t*(-0.82215223 + t*0.17087277)))))))));
+  const erfc = x>=0 ? ans : 2-ans;
+  return 1-erfc;
+}
+function passProb(s){
+  if(s<=0) return 0;
+  return Math.min(Math.max(erf(s/Math.SQRT2),0), 1-1e-15);
+}
+
+// evenly interleave a histogram (obj window->count) into a sequence of window sizes
+function buildSequence(counts){
+  const windows = Object.keys(counts).map(Number).filter(k=>counts[k]>0).sort((a,b)=>a-b);
+  const total = windows.reduce((s,k)=>s+counts[k],0);
+  const used = {}; windows.forEach(k=>used[k]=0);
+  const seq = [];
+  for(let j=0;j<total;j++){
+    let best=null,br=Infinity;
+    for(const k of windows){
+      if(used[k]>=counts[k]) continue;
+      const ratio=(used[k]+0.5)/counts[k];
+      if(ratio<br){br=ratio;best=k;}
+    }
+    seq.push(best); used[best]++;
+  }
+  return seq;
+}
+
+// histogram -> inputs [{t,k}] via even spacing
+function histInputs(counts,T){
+  const seq=buildSequence(counts);
+  const M=seq.length;
+  const dt=M>0?T/M:0;
+  return seq.map((k,j)=>({t:(j+0.5)*dt,k}));
+}
+
+function localCps(inputs,j,T){
+  const n=inputs.length;
+  if(n===1) return T>0?1/T:0;
+  let gap = j===0 ? (inputs[1].t-inputs[0].t) : (inputs[j].t-inputs[j-1].t);
+  if(!(gap>0)) gap=1e-6;
+  return 1/gap;
+}
+
+// inputs must be sorted ascending by t
+function evaluate(L,cfg){
+  const {inputs,f,T,mods}=cfg;
+  const M=inputs.length;
+  if(M===0) return {ETC:Infinity,PC:0};
+  const tn=Math.max(T, inputs[M-1].t);
+  const ps=new Array(M);
+  for(let j=0;j<M;j++){
+    const inp=inputs[j];
+    let s=0.5*(inp.k/f)*L;
+    if(mods.nerve.on)   s*=Math.exp(-mods.nerve.k*inp.t);
+    if(mods.fatigue.on) s*=Math.exp(-mods.fatigue.k*(j+1));
+    if(mods.cps.on){ const c=localCps(inputs,j,T); s*=Math.pow(4/Math.max(1,2*c),mods.cps.k); }
+    ps[j]=passProb(s);
+  }
+  let logPC=0; for(let j=0;j<M;j++) logPC+=Math.log(ps[j]);
+  const PC=Math.exp(logPC);
+  let r=1,sumFail=0;
+  for(let j=0;j<M;j++){ sumFail+=inputs[j].t*r*(1-ps[j]); r*=ps[j]; }
+  const ETA=tn*PC+sumFail;
+  return {ETC: PC>0?ETA/PC:Infinity, PC};
+}
+
+function solveLstar(cfg,targetSec){
+  if(cfg.inputs.length===0) return null;
+  let lo=0,hi=1,guard=0;
+  while(evaluate(hi,cfg).ETC>targetSec){ hi*=2; if(++guard>300) break; }
+  for(let i=0;i<200;i++){
+    const mid=0.5*(lo+hi);
+    if(evaluate(mid,cfg).ETC>targetSec) lo=mid; else hi=mid;
+  }
+  return 0.5*(lo+hi);
+}
+
+/* ================= UI ================= */
+let mode="hist";
+let unit="sec";
+
+// build histogram grid
+const grid=document.getElementById('grid');
+for(let k=1;k<=MAXW;k++){
+  const cell=document.createElement('div');
+  cell.className='cell';
+  cell.innerHTML=`<label><span class="win">${k}f</span> <span class="ms" id="ms${k}"></span></label>
+    <input type="number" min="0" step="1" value="0" data-w="${k}">`;
+  grid.appendChild(cell);
+}
+
+// manual rows
+const manualBody=document.getElementById('manualBody');
+function addRow(time,frames){
+  const tr=document.createElement('tr');
+  tr.innerHTML=`
+    <td><input type="number" class="mTime" step="0.01" min="0" value="${time??''}"></td>
+    <td><input type="number" class="mWin" step="1" min="1" value="${frames??''}"></td>
+    <td class="mMs" style="font-size:11px;color:#5b6675">—</td>
+    <td><button class="del">&times;</button></td>`;
+  tr.querySelector('.del').addEventListener('click',()=>{tr.remove(); recompute();});
+  manualBody.appendChild(tr);
+}
+// seed with the example
+[[1.9,2],[2.3,6],[2.4,19]].forEach(r=>addRow(r[0],r[1]));
+document.getElementById('addRow').addEventListener('click',()=>{addRow('', ''); recompute();});
+
+// mode toggle
+document.getElementById('modeSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  mode=b.dataset.mode;
+  document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.toggle('active',x===b));
+  document.getElementById('histPanel').classList.toggle('hidden',mode!=='hist');
+  document.getElementById('manualPanel').classList.toggle('hidden',mode!=='manual');
+  recompute();
+});
+
+// unit toggle (converts existing values so real times stay fixed)
+document.getElementById('unitSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b || b.dataset.unit===unit) return;
+  const newUnit=b.dataset.unit;
+  const T=num('tlen');
+  if(T>0){
+    document.querySelectorAll('#manualBody .mTime').forEach(inp=>{
+      const v=parseFloat(inp.value);
+      if(!isNaN(v)){
+        inp.value = newUnit==='pct' ? +( (v/T*100).toFixed(4) ) : +( (v/100*T).toFixed(4) );
+      }
+    });
+  }
+  unit=newUnit;
+  document.querySelectorAll('#unitSeg button').forEach(x=>x.classList.toggle('active',x===b));
+  document.getElementById('unitLabelHead').textContent = unit==='pct' ? '%' : 's';
+  recompute();
+});
+
+// import .txt + format guide
+const fileInput=document.getElementById('fileInput');
+document.getElementById('importBtn').addEventListener('click',()=>fileInput.click());
+fileInput.addEventListener('change',e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>importText(String(ev.target.result));
+  reader.readAsText(file);
+  fileInput.value='';
+});
+function importText(text){
+  const status=document.getElementById('imStatus');
+  const parsed=[];
+  text.split(/\r?\n/).forEach(line=>{
+    const m=line.match(/(-?\d*\.?\d+)\s*-\s*(\d*\.?\d+)/);
+    if(m){ const t=parseFloat(m[1]), w=parseFloat(m[2]); if(!isNaN(t)&&!isNaN(w)) parsed.push([t,w]); }
+  });
+  if(parsed.length===0){
+    status.style.color='var(--warn)';
+    status.textContent='No valid "time - window" lines found — see the format guide.';
+    document.getElementById('guideModal').classList.add('show');
+    return;
+  }
+  manualBody.innerHTML='';
+  parsed.forEach(r=>addRow(r[0],r[1]));
+  status.style.color='var(--good)';
+  status.textContent=`Imported ${parsed.length} input${parsed.length>1?'s':''} (read as ${unit==='pct'?'%':'seconds'}).`;
+  recompute();
+}
+const guideModal=document.getElementById('guideModal');
+document.getElementById('guideBtn').addEventListener('click',()=>guideModal.classList.add('show'));
+document.getElementById('guideClose').addEventListener('click',()=>guideModal.classList.remove('show'));
+guideModal.addEventListener('click',e=>{ if(e.target===guideModal) guideModal.classList.remove('show'); });
+
+function num(id){const v=parseFloat(document.getElementById(id).value); return isNaN(v)?0:v;}
+
+function readManual(T){
+  const rows=[...document.querySelectorAll('#manualBody tr')];
+  const inputs=[];
+  rows.forEach(tr=>{
+    const tv=parseFloat(tr.querySelector('.mTime').value);
+    const kv=parseFloat(tr.querySelector('.mWin').value);
+    const msCell=tr.querySelector('.mMs');
+    if(!isNaN(kv) && kv>=1 && !isNaN(tv) && tv>=0){
+      const tSec = unit==='pct' ? (tv/100*T) : tv;
+      inputs.push({t:tSec,k:kv});
+      msCell.textContent = (num('fps')>0)?(1000*kv/num('fps')).toFixed(2)+'ms':'—';
+    } else {
+      msCell.textContent='—';
+    }
+  });
+  inputs.sort((a,b)=>a.t-b.t);
+  return inputs;
+}
+
+function recompute(){
+  const f=num('fps')||240;
+  const T=num('tlen');
+  const targetH=num('target');
+
+  // histogram ms labels
+  for(let k=1;k<=MAXW;k++){
+    const el=document.getElementById('ms'+k);
+    if(el) el.textContent = f>0 ? (1000*k/f).toFixed(2)+'ms' : '';
+  }
+
+  let inputs=[];
+  if(mode==='hist'){
+    const counts={}; let total=0;
+    document.querySelectorAll('#grid input').forEach(inp=>{
+      const w=+inp.dataset.w; const c=Math.max(0,Math.floor(parseFloat(inp.value)||0));
+      if(c>0){counts[w]=c; total+=c;}
+    });
+    document.getElementById('histTotal').textContent=total;
+    if(total>0 && T>0) inputs=histInputs(counts,T);
+  } else {
+    inputs=readManual(T);
+    document.getElementById('manTotal').textContent=inputs.length;
+  }
+
+  const stats=document.getElementById('stats');
+  const big=document.getElementById('lstar');
+  const rsub=document.getElementById('rsub');
+  const show=(msg)=>{big.textContent='—'; rsub.className='rsub msg'; rsub.textContent=msg; stats.style.display='none';};
+
+  if(!(T>0)) return show('Enter a level length greater than 0.');
+  if(inputs.length===0) return show('Add at least one input.');
+  if(!(targetH>0)) return show('Enter a target time greater than 0.');
+
+  const mods={
+    nerve:{on:document.getElementById('nerveOn').checked, k:num('nerveK')},
+    fatigue:{on:document.getElementById('fatigueOn').checked, k:num('fatigueK')},
+    cps:{on:document.getElementById('cpsOn').checked, k:num('cpsK')},
+  };
+  const cfg={inputs, f, T, mods};
+  const targetSec=targetH*3600;
+  const Lstar=solveLstar(cfg,targetSec);
+  const chk=evaluate(Lstar,cfg);
+
+  big.textContent=Lstar.toLocaleString(undefined,{maximumFractionDigits:1});
+  rsub.className='rsub';
+  rsub.innerHTML=`Precision required to average a <b>${targetH}-hour</b> completion of this ${inputs.length}-input level.`;
+  stats.style.display='flex';
+  document.getElementById('sigma').textContent=(1000/Lstar).toFixed(2)+' ms';
+  document.getElementById('pc').textContent=chk.PC<1e-4?chk.PC.toExponential(2):(chk.PC*100).toFixed(3)+'%';
+  document.getElementById('etc').textContent=(chk.ETC/3600).toFixed(2)+' h';
+}
+
+document.addEventListener('input',recompute);
+document.addEventListener('change',recompute);
+recompute();
+</script>
+</body>
+</html>
