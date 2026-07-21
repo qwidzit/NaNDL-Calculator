@@ -10,101 +10,79 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 
 ## Current status
 
-- ✅ **Working prototype** — `nandl_calculator_2.html`, the original self-contained
-  single file. Kept in the repo as the reference/source of truth.
-- ✅ **Refactored into files** (Step 1) — split into `index.html` + `css/styles.css` +
-  `js/calc.js` (pure math) + `js/app.js` (UI). Behavior is a verbatim lift; verified the
-  DOM ids/asset paths all wire up and that the page loads + runs as an ES module over HTTP.
-- ✅ **Regression tests** (Step 2) — `tests/calc.test.js` runs the spec §6 known-good
-  values with Node's built-in runner (`npm test`, zero dependencies). **7/7 pass**,
-  matching every anchor within 0.1%.
-- ✅ **Spec / handoff doc** — `NaNDL_calculator_spec.md`.
-- ⏳ **Not deployed** (Step 3) — no hosting configured yet.
-
-The app is **functionally deployment-ready**. What's left is shipping it (Step 3) and an
-optional, prioritized feature roadmap (below).
-
----
-
-## Plan to deployment
-
-### Step 1 — Refactor into separate files ✅ DONE
-Split the monolith along its natural seams (markup / style / pure math / DOM wiring).
-Pure math is now an importable ES module. No behavior change.
-
-### Step 2 — Lock the math with regression tests ✅ DONE
-Ported spec §6 values into `tests/calc.test.js`. Guards `erf(1)=0.8427`,
-`passProb(1)=0.6827`/`(2)=0.9545`, histogram L\*=175.543 (+mods 485.318), manual-seconds
-L\*=2.763 (+mods 10.941), import-sample L\*=19.161 (seconds) / 17.749 (%). `npm test` → 7/7.
-
-### Step 3 — Deploy as a static site ⏳ NEXT
-Point hosting at `index.html`. GitHub Pages is the natural fit (enable Pages on `main`,
-or add a Pages Actions workflow). Add a short `README.md`, page `<meta>`/favicon, then
-verify the live URL reproduces the regression values in a browser.
+- ✅ **Refactored into files** — `index.html` + `css/styles.css` + `js/calc.js` (pure
+  math) + `js/app.js` (UI). This is the live app.
+- ✅ **Regression tests** — `tests/calc.test.js`, Node's built-in runner (`npm test`,
+  zero deps). **9/9 pass**: the spec §6 values plus the new `perInputStats`/`sliceRun`
+  helpers.
+- ✅ **Feature set complete** — URL-shareable state, per-input breakdown, fps presets +
+  validation, `.txt` export, run/segment scoring, and offline support (see below).
+- ✅ **Verified in a real browser** — headless Chromium confirms the module loads over
+  HTTP, share-links restore full state, histogram/manual/run all compute correctly
+  (both seconds and %), and every offline asset is served.
+- ⏳ **Not deployed** (Step 3) — hosting still needs to be turned on.
+- 🗂️ `nandl_calculator_2.html` — the original single-file prototype, kept for reference
+  only. **It predates the new features**; the live app is `index.html` + the modules.
 
 ---
 
-## Current file layout
+## Delivered features
+
+| Feature | Where | Notes |
+|---|---|---|
+| **Refactor** (Step 1) | `index.html`, `css/`, `js/calc.js`, `js/app.js` | Behavior-preserving split; math is an importable ES module. |
+| **Regression tests** (Step 2) | `tests/calc.test.js` | `npm test` → 9/9. |
+| **URL-shareable state** (Step 4) | `js/app.js` | Whole UI encoded in the `#s=` hash (base64 JSON); **Copy shareable link** button. No browser storage — state lives in the link. |
+| **Per-input breakdown** (Step 5) | `perInputStats()` + breakdown table | Each input's `p`/`reach` at L\*, time in **both seconds and %**, weakest inputs flagged & color-coded. |
+| **fps presets + validation** (Step 6) | Setup panel | 120 / 240 / 480 quick-select; blocks fps ≤ 0, warns on non-integer fps. |
+| **Manual `.txt` export** | Export button | Mirrors the import format (`time - window`), so round-trips with Import. |
+| **Run / segment** | `sliceRun()` + Run panel | A range like `23.2 - 81.8` scores only that slice as its own level (inputs re-based to start at 0, length = to − from). Range respects the Seconds/% switch; the hint and breakdown show **both units**. |
+| **Offline** | `sw.js` + `manifest.webmanifest` | Service worker caches all first-party assets; the app runs with no network after first load. "offline-ready" badge appears once cached. |
+
+**Offline & storage note:** the only persistence is the service-worker **asset** cache
+(needed for offline). There are still no cookies and no localStorage of user input — the
+shareable state is carried in the URL, not stored. To ship updated files after a change,
+bump `CACHE` in `sw.js` (cache-first otherwise keeps the cached copy).
+
+---
+
+## File layout
 
 ```
 /
-├── index.html               # markup only; links css/ + loads js/app.js as a module
-├── css/styles.css           # all presentation (was the inline <style>)
+├── index.html               # markup; links css/ + loads js/app.js as a module
+├── css/styles.css           # all presentation
 ├── js/
-│   ├── calc.js              # PURE math ES module, no DOM: MAXW, erf, passProb,
-│   │                        #   buildSequence, histInputs, localCps, evaluate, solveLstar
-│   └── app.js               # UI layer: grid + manual rows, mode/unit toggles,
-│                            #   .txt import + guide modal, recompute(); imports calc.js
-├── tests/calc.test.js       # spec §6 regression values (`npm test`)
-├── package.json             # marks ESM ("type":"module") + the test script; no deps
-├── nandl_calculator_2.html  # original single-file prototype (reference)
+│   ├── calc.js              # PURE math ES module: erf, passProb, buildSequence,
+│   │                        #   histInputs, localCps, evaluate, solveLstar,
+│   │                        #   perInputStats, sliceRun, MAXW
+│   └── app.js               # UI: input modes, run/segment, breakdown, fps presets,
+│                            #   import/export, URL state, service-worker registration
+├── sw.js                    # offline service worker (cache-first, versioned)
+├── manifest.webmanifest     # PWA manifest (offline / installable)
+├── tests/calc.test.js       # spec §6 regression + helper tests (`npm test`)
+├── package.json             # ESM + test script; no dependencies
+├── nandl_calculator_2.html  # original single-file prototype (reference only)
 ├── STATUS.md
 └── NaNDL_calculator_spec.md
 ```
 
 ---
 
-## Roadmap after deployment — review of the spec §7 ideas
+## Remaining — Step 3: Deploy
 
-My take on each suggestion the spec floated, and whether it's worth building.
+Point static hosting at `index.html`. GitHub Pages fits this repo (enable Pages on
+`main`, or add a Pages Actions workflow). Add a short `README.md`, then verify the live
+URL reproduces the regression values and that a second load works offline (DevTools →
+Network → Offline).
 
-### Recommended next (high value, low cost) — Steps 4–6
+- One deploy note: the service worker's scope is its serving directory. On a project
+  Pages site served under `/<repo>/`, `sw.js` and the asset paths (all relative) resolve
+  correctly as-is; no change needed.
 
-**Step 4 — Shareable state in the URL.** Encode the histogram / manual list / settings
-into the URL hash so a specific level can be linked and reopened. This is the single
-biggest "tool → website" upgrade: a calculator people share is far more useful than one
-they can't. Cheap, no dependency, and it keeps the no-storage property (state lives in
-the link, not the browser). **Worth it.**
+## Reviewed but not built (from spec §7)
 
-**Step 5 — Per-input breakdown.** Surface a small table of each input's `pⱼ` (pass prob)
-and `rⱼ` (reach prob) and highlight the weakest inputs. The data is *already computed and
-then discarded* inside `evaluate()` — we just return the arrays and render them. Turns a
-single opaque number into "here's *where* the level is hard," which is the actual insight
-users want. High value, low cost. **Worth it.**
-
-**Step 6 — fps validation + presets.** Add 60/120/240/480 quick-select buttons and
-validate fps (reject 0 / negative / non-integer with a clear message instead of the
-silent `||240` fallback). Presets are minor polish; the validation is real robustness.
-Cheap. **Worth it** (prioritize the validation).
-
-### Optional / lower priority
-
-**Manual-list export (`.txt`).** A matching export to the existing import format closes
-an obvious loop and is nearly free. **Worth it if time allows** — bundle with Step 4/5.
-JSON export is a nice-to-have, not needed.
-
-**Larger / dynamic histogram windows (>20f).** Deferred. The fixed 1f–20f range already
-covers the hard inputs that dominate L\*; windows above ~20f are easy inputs that barely
-move the result, and dynamic rows add UI complexity for marginal gain. Revisit only if
-users actually hit the ceiling. **Skip for now.**
-
-### Not actionable / won't do
-
-**Real modifier calibration (`k_t / k_u / k_c`).** Blocked externally — the NaNDL site
-does not publish its calibrated constants (spec §2.4, §5), which is exactly why Fatigue
-and CPS carry the **BROKEN?** tags. Keep the constants editable and the tags in place
-until upstream publishes real values; there's nothing to calibrate against today.
-**Don't remove the tags.**
-
-**"Preserve no-storage / no-deps."** Not a task — it's a constraint we're already
-honoring and should keep honoring in every step above.
+- **Larger / dynamic histogram windows (>20f)** — deferred; marginal effect on L\*, adds
+  UI complexity.
+- **Real modifier calibration (`k_t / k_u / k_c`)** — blocked upstream; NaNDL doesn't
+  publish the constants (that's why Fatigue/CPS keep the **BROKEN?** tags). Left editable.

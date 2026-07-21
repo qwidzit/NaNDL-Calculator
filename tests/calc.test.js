@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { erf, passProb, histInputs, evaluate, solveLstar } from "../js/calc.js";
+import { erf, passProb, histInputs, evaluate, solveLstar, perInputStats, sliceRun } from "../js/calc.js";
 
 // Shared setup from spec §6: f=240, T=60s, target=24h, modifiers off unless noted.
 const F = 240;
@@ -24,10 +24,13 @@ const modsOn = {
 // Assert |actual - expected| / |expected| <= relTol (3 sig figs => ~5e-3 is plenty;
 // the math is a verbatim lift so it matches far tighter, but bisection has a floor).
 function approxRel(actual, expected, relTol, label) {
-  const err = Math.abs(actual - expected) / Math.abs(expected);
+  // Fall back to absolute error when the expected value is 0 (relative is undefined).
+  const err = expected === 0
+    ? Math.abs(actual - expected)
+    : Math.abs(actual - expected) / Math.abs(expected);
   assert.ok(
     err <= relTol,
-    `${label}: expected ~${expected}, got ${actual} (rel err ${err.toExponential(2)} > ${relTol})`
+    `${label}: expected ~${expected}, got ${actual} (err ${err.toExponential(2)} > ${relTol})`
   );
 }
 
@@ -94,4 +97,37 @@ test("import sample read as % of 60s -> L* = 17.749", () => {
     .sort((a, b) => a.t - b.t);
   const L = lstarOf(inputs, modsOff);
   approxRel(L, 17.749, 1e-3, "import-percent L*");
+});
+
+// --- additive helpers (per-input breakdown + run/segment) --------------------
+
+test("perInputStats: p/r consistent with evaluate's P(C)", () => {
+  const inputs = [ { t: 1.9, k: 2 }, { t: 2.3, k: 6 }, { t: 2.4, k: 19 } ];
+  const cfg = { inputs, f: F, T, mods: modsOff };
+  const L = 5;
+  const per = perInputStats(L, cfg);
+  assert.equal(per.length, 3);
+  // reach of the first input is 1 (you always arrive at it)
+  approxRel(per[0].r, 1, 1e-12, "first reach");
+  // P(C) == product of all pass probs == last reach * last p
+  const prodP = per.reduce((a, s) => a * s.p, 1);
+  approxRel(prodP, evaluate(L, cfg).PC, 1e-9, "prod(p) == P(C)");
+  // reach[j] == product of p for l < j
+  approxRel(per[2].r, per[0].p * per[1].p, 1e-12, "reach[2]");
+  // q == 1 - p
+  for (const s of per) approxRel(s.q, 1 - s.p, 1e-12, "q");
+});
+
+test("sliceRun: filters to [start,end] and re-bases to 0", () => {
+  const inputs = [
+    { t: 10, k: 3 }, { t: 23.2, k: 5 }, { t: 50, k: 8 }, { t: 81.8, k: 4 }, { t: 90, k: 6 },
+  ];
+  const seg = sliceRun(inputs, 23.2, 81.8); // e.g. a "23.2-81.8" run
+  assert.equal(seg.length, 3, "endpoints inclusive, outside dropped");
+  approxRel(seg[0].t, 0, 1e-9, "segment starts at 0");
+  approxRel(seg[1].t, 50 - 23.2, 1e-9, "middle re-based");
+  approxRel(seg[2].t, 81.8 - 23.2, 1e-9, "end re-based");
+  assert.deepEqual(seg.map(s => s.k), [5, 8, 4], "windows preserved, sorted by time");
+  // order-independent of start/end argument order
+  assert.deepEqual(sliceRun(inputs, 81.8, 23.2).map(s => s.t), seg.map(s => s.t));
 });

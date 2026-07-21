@@ -3,8 +3,9 @@
 // ============================================================================
 // NaNDL precision math — pure, framework-free, no DOM access.
 // See NaNDL_calculator_spec.md §2 (math model) and §4 (code map).
-// Every function here is a straight lift from the original prototype; behavior
-// is unchanged so the spec §6 regression values still hold.
+// evaluate()/solveLstar() are a verbatim lift from the original prototype, so
+// the spec §6 regression values still hold. perInputStats() and sliceRun() are
+// additive helpers for the per-input breakdown and run/segment features.
 // ============================================================================
 
 // Largest frame-window size the histogram grid supports (1f … 20f).
@@ -64,13 +65,11 @@ export function localCps(inputs,j,T){
   return 1/gap;
 }
 
-// Compute E[T_C] (expected time to complete) and P(C) for a precision L.
-// inputs must be sorted ascending by t. cfg = { inputs:[{t,k}], f, T, mods }.
-export function evaluate(L,cfg){
+// Per-input effective pass probabilities with modifiers applied. Shared by
+// evaluate() and perInputStats() so the modifier math lives in exactly one place.
+function passProbs(L,cfg){
   const {inputs,f,T,mods}=cfg;
   const M=inputs.length;
-  if(M===0) return {ETC:Infinity,PC:0};
-  const tn=Math.max(T, inputs[M-1].t);
   const ps=new Array(M);
   for(let j=0;j<M;j++){
     const inp=inputs[j];
@@ -80,12 +79,39 @@ export function evaluate(L,cfg){
     if(mods.cps.on){ const c=localCps(inputs,j,T); s*=Math.pow(4/Math.max(1,2*c),mods.cps.k); }
     ps[j]=passProb(s);
   }
+  return ps;
+}
+
+// Compute E[T_C] (expected time to complete) and P(C) for a precision L.
+// inputs must be sorted ascending by t. cfg = { inputs:[{t,k}], f, T, mods }.
+export function evaluate(L,cfg){
+  const {inputs,T}=cfg;
+  const M=inputs.length;
+  if(M===0) return {ETC:Infinity,PC:0};
+  const tn=Math.max(T, inputs[M-1].t);
+  const ps=passProbs(L,cfg);
   let logPC=0; for(let j=0;j<M;j++) logPC+=Math.log(ps[j]);
   const PC=Math.exp(logPC);
   let r=1,sumFail=0;
   for(let j=0;j<M;j++){ sumFail+=inputs[j].t*r*(1-ps[j]); r*=ps[j]; }
   const ETA=tn*PC+sumFail;
   return {ETC: PC>0?ETA/PC:Infinity, PC};
+}
+
+// Per-input breakdown at precision L: for each input, its pass prob p, reach
+// prob r = ∏_{l<j} p_l (prob of arriving at it alive), and q = 1 - p. The arrays
+// evaluate() computes internally and discards — surfaced for the breakdown table.
+export function perInputStats(L,cfg){
+  const {inputs}=cfg;
+  const M=inputs.length;
+  const ps=passProbs(L,cfg);
+  const out=new Array(M);
+  let r=1;
+  for(let j=0;j<M;j++){
+    out[j]={t:inputs[j].t, k:inputs[j].k, p:ps[j], r, q:1-ps[j]};
+    r*=ps[j];
+  }
+  return out;
 }
 
 // Bisection for L* where E[T_C] == targetSec. Expands the upper bracket first.
@@ -98,4 +124,17 @@ export function solveLstar(cfg,targetSec){
     if(evaluate(mid,cfg).ETC>targetSec) lo=mid; else hi=mid;
   }
   return 0.5*(lo+hi);
+}
+
+// Extract a run/segment: keep inputs whose absolute time lies in [startSec,endSec]
+// (endpoints inclusive) and re-base them so the segment starts at 0, turning a
+// slice of the level into its own self-contained level. Returns a new sorted
+// array; the segment's level length is (endSec - startSec), computed by the caller.
+export function sliceRun(inputs,startSec,endSec){
+  const lo=Math.min(startSec,endSec), hi=Math.max(startSec,endSec);
+  const eps=1e-9;
+  return inputs
+    .filter(inp=> inp.t>=lo-eps && inp.t<=hi+eps)
+    .map(inp=>({t: inp.t-lo, k: inp.k}))
+    .sort((a,b)=>a.t-b.t);
 }

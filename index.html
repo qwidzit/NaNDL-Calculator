@@ -3,8 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Estimate the timing precision needed to complete a Geometry-Dash-style level, using the NaNDL probabilistic difficulty model.">
+<meta name="description" content="Estimate the timing precision needed to complete a Geometry-Dash-style level, using the NaNDL probabilistic difficulty model. Works offline.">
+<meta name="theme-color" content="#0d1017">
 <title>NaNDL Precision Calculator</title>
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -12,13 +14,24 @@
   <h1>NaNDL Precision Calculator</h1>
   <div class="sub">Read off the precision needed to average a target-time completion — from a frame-window histogram, or from an exact list of timed inputs.</div>
 
+  <div class="toolbar">
+    <button class="btn2" id="copyLink">&#128279; Copy shareable link</button>
+    <span class="imstatus" id="copyStatus"></span>
+    <span class="offline-badge" id="offlineBadge" title="Cached for offline use">offline-ready</span>
+  </div>
+
   <div class="panel">
     <h2>Setup</h2>
     <div class="row">
       <div class="field">
         <label>Frame rate (fps)</label>
         <input type="number" id="fps" value="240" min="1" step="1">
-        <div class="hint">1 frame = 1/fps seconds</div>
+        <div class="presets" id="fpsPresets">
+          <button type="button" data-fps="120">120</button>
+          <button type="button" data-fps="240">240</button>
+          <button type="button" data-fps="480">480</button>
+        </div>
+        <div class="hint" id="fpsHint">1 frame = 1/fps seconds</div>
       </div>
       <div class="field">
         <label>Level length (seconds)</label>
@@ -60,6 +73,7 @@
       </div>
       <div class="mtools">
         <button class="btn2" id="importBtn">&#8593; Import .txt</button>
+        <button class="btn2" id="exportBtn">&#8595; Export .txt</button>
         <button class="btn2 ghost" id="guideBtn">Format guide</button>
         <input type="file" id="fileInput" accept=".txt,text/plain" style="display:none">
         <span class="imstatus" id="imStatus"></span>
@@ -76,6 +90,22 @@
       <button class="addbtn" id="addRow">+ Add input</button>
       <div class="totline">Total inputs: <b id="manTotal">0</b></div>
     </div>
+  </div>
+
+  <div class="panel">
+    <h2>Run / segment <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— score just a slice of the level as its own run</span></h2>
+    <div class="modrow" style="border-top:none">
+      <label class="switch"><input type="checkbox" id="runOn"><span class="slider"></span></label>
+      <div class="name">
+        <b>Calculate a run</b>
+        <span class="desc">only inputs between <b>from</b> and <b>to</b> are scored, re-based to start at 0 — like <code>23.2 - 81.8</code></span>
+      </div>
+      <div class="runrange">
+        <label>Range (<span class="unitLabel">s</span>)</label>
+        <input type="text" id="runRange" placeholder="23.2 - 81.8" autocomplete="off">
+      </div>
+    </div>
+    <div class="totline" id="runHint">Off — the whole level is scored.</div>
   </div>
 
   <div class="panel">
@@ -111,6 +141,24 @@
     </div>
   </div>
 
+  <details id="breakdown" class="hidden">
+    <summary>Per-input breakdown <span id="bdCount" style="color:var(--muted);font-weight:400"></span></summary>
+    <div class="body">
+      <p style="margin-top:0">Each input at <b>L*</b>: its pass probability <code>p</code>, the chance of reaching it
+      alive <code>reach</code>, and — since a run is scored on its own — times shown in <b>both</b> seconds and % of
+      the scored length. The <span class="weak-tag">weakest</span> inputs (lowest <code>p</code>) are where the level fights back.</p>
+      <div class="tablewrap">
+        <table class="breakdown" id="bdTable">
+          <thead><tr>
+            <th>#</th><th>Time (s)</th><th>Time (%)</th><th>Window</th><th>ms</th>
+            <th>p (pass)</th><th>reach</th>
+          </tr></thead>
+          <tbody id="bdBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+
   <details>
     <summary>How it works &amp; assumptions</summary>
     <div class="body">
@@ -135,6 +183,11 @@
       taken directly from your data (nothing is scattered evenly). The <b>Seconds / %</b> switch reads times either as
       seconds or as a percentage of the level length, where % grows evenly across the level (50% = halfway in time).</p>
 
+      <h4>Run / segment</h4>
+      <p>Turn on <b>Calculate a run</b> and give a range like <code>23.2 - 81.8</code> to score only the inputs inside
+      it. The slice is treated as its own level: its inputs are re-based so the run starts at 0 and its length becomes
+      <code>to &minus; from</code>. The range is read in whatever the <b>Seconds / %</b> switch is set to.</p>
+
       <h4>Modifiers</h4>
       <p>Each enabled modifier multiplies an input's effective window before the probability is taken: <b>Nerve</b>
       <code>e^(&minus;k&middot;t&#8341;)</code>, <b>Fatigue</b> <code>e^(&minus;k&middot;i)</code>, <b>CPS</b>
@@ -157,7 +210,7 @@
 8.1 - 11
 10 - 4</pre>
       <p><b>time</b> is the input's position and <b>window</b> is its size in frames. A dash separates them; spaces around the dash are optional (<code>1.5 - 3</code> and <code>1.5-3</code> both work).</p>
-      <p>Time is read in whatever the <b>Seconds / %</b> switch is set to at import — so the same file loads as absolute seconds in Seconds mode, or as percentages of the level length in % mode.</p>
+      <p>Time is read in whatever the <b>Seconds / %</b> switch is set to at import — so the same file loads as absolute seconds in Seconds mode, or as percentages of the level length in % mode. <b>Export .txt</b> writes the current list back out in this same format.</p>
       <p>Blank lines and anything that isn't a <code>number - number</code> pair are skipped. Importing <b>replaces</b> the current list.</p>
     </div>
   </div>

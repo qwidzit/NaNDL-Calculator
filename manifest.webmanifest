@@ -1,0 +1,18 @@
+{
+  "name": "NaNDL Precision Calculator",
+  "short_name": "NaNDL Calc",
+  "description": "Estimate the timing precision needed to complete a Geometry-Dash-style level. Works offline.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d1017",
+  "theme_color": "#0d1017",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230d1017'/%3E%3Ctext x='256' y='340' font-size='300' font-family='Segoe UI,Arial,sans-serif' font-weight='700' text-anchor='middle' fill='%235ed0c6'%3EL%2A%3C/text%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
