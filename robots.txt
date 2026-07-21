@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Dev artifacts that ship in the repo but shouldn't be indexed as pages.
+Disallow: /nandl_calculator_2.html
+Disallow: /NaNDL_calculator_spec.md
+Disallow: /STATUS.md
+
+Sitemap: https://nandl-calculator.pages.dev/sitemap.xml

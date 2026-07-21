@@ -1,7 +1,7 @@
 // Offline service worker — caches all first-party assets so the calculator
 // works with no network after the first load. Bump CACHE to ship updated files
 // (cache-first means clients otherwise keep the cached version).
-const CACHE = "nandl-v1";
+const CACHE = "nandl-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const ASSETS = [
   "./js/app.js",
   "./js/calc.js",
   "./manifest.webmanifest",
+  "./favicon.svg",
 ];
 
 self.addEventListener("install", (e) => {

@@ -20,7 +20,12 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 - ✅ **Verified in a real browser** — headless Chromium confirms the module loads over
   HTTP, share-links restore full state, histogram/manual/run all compute correctly
   (both seconds and %), and every offline asset is served.
-- ⏳ **Not deployed** (Step 3) — hosting still needs to be turned on.
+- ✅ **Deployment assets added** — `README.md`, SEO metadata (Open Graph + Twitter card +
+  JSON-LD), `robots.txt`, `sitemap.xml`, `favicon.svg`, `og-image.png`, a themed `404.html`,
+  and Cloudflare `_headers`. Ready to publish.
+- ⏳ **Publishing** — the owner is setting up **Cloudflare Pages** (no build step; output
+  dir = repo root). Remaining manual step: replace the placeholder domain
+  `nandl-calculator.pages.dev` if a custom domain is used (see README).
 - 🗂️ `nandl_calculator_2.html` — the original single-file prototype, kept for reference
   only. **It predates the new features**; the live app is `index.html` + the modules.
 
@@ -69,16 +74,19 @@ bump `CACHE` in `sw.js` (cache-first otherwise keeps the cached copy).
 
 ---
 
-## Remaining — Step 3: Deploy
+## Deploying (Cloudflare Pages)
 
-Point static hosting at `index.html`. GitHub Pages fits this repo (enable Pages on
-`main`, or add a Pages Actions workflow). Add a short `README.md`, then verify the live
-URL reproduces the regression values and that a second load works offline (DevTools →
-Network → Offline).
+The repo is the deployable output as-is — no build step. Pages settings: framework preset
+**None**, build command **empty**, output directory **`/`** (repo root). `_headers` and
+`404.html` are picked up because they live in the output root. Full steps + the
+domain-replacement one-liner are in `README.md`.
 
-- One deploy note: the service worker's scope is its serving directory. On a project
-  Pages site served under `/<repo>/`, `sw.js` and the asset paths (all relative) resolve
-  correctly as-is; no change needed.
+After deploy, verify: the live URL reproduces the spec §6 values, a second load works
+offline (DevTools → Network → Offline), and the share link round-trips state.
+
+- Service-worker scope is its serving directory; all asset paths are relative, so a
+  `pages.dev` subdomain or a custom domain both work without changes.
+- Cache-first SW: bump `CACHE` in `sw.js` to ship updated files.
 
 ## Reviewed but not built (from spec §7)
 
