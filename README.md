@@ -20,7 +20,11 @@ no accounts. Shareable state lives in the URL; the only persistence is an offlin
 - **Modifiers** — optional Nerve / Fatigue / CPS multipliers (off by default), using the
   **calibrated constants published by the official NaNDL calculator** and still editable.
   CPS keeps a `WIP` tag because upstream itself calls that multiplier unreliable.
-- **fps presets** 120 / 240 / 480 + validation.
+- **fps presets** 120 / 240 / 480 + validation, plus separate **Game FPS** and a **Frames** time unit.
+- **Respawn time** added to every attempt, **ignored (`-`) windows** that pass for free, and editable
+  **input numbers** that drive Fatigue and local CPS — matching the official calculator.
+- **Fixed-precision mode** — instead of solving for `L*`, report P(C), expected attempts and
+  completion time at a precision you supply.
 - **`.txt` import / export** of the manual list, plus **JSON import / export** compatible with
   the official NaNDL calculator (frame-window rows, `gameFps`, `windowFps`, `respawnTime`,
   `useFrames`).

@@ -4,7 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { erf, passProb, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile,
-         parseInputsText, NANDL_CONSTANTS, parseCalculatorJson, buildCalculatorJson } from "../js/calc.js";
+         parseInputsText, NANDL_CONSTANTS, parseCalculatorJson, buildCalculatorJson,
+         localCps } from "../js/calc.js";
 
 // Shared setup from spec §6: f=240, T=60s, target=24h, modifiers off unless noted.
 const F = 240;
@@ -268,7 +269,7 @@ test("parseCalculatorJson: reads the official field set", () => {
   assert.equal(r.ok, true);
   assert.equal(r.windowFps, 240);
   assert.equal(r.respawnTime, 0.5);
-  assert.deepEqual(r.inputs, [{ t: 1.9, k: 2 }, { t: 2.3, k: 6 }]);
+  assert.deepEqual(r.inputs, [{ t: 1.9, k: 2, n: 1 }, { t: 2.3, k: 6, n: 2 }]);
 });
 
 test("parseCalculatorJson: frame-number positions convert via Game FPS", () => {
@@ -285,13 +286,15 @@ test("parseCalculatorJson: tolerates key spellings, bare pairs, and ignored wind
     rows: [ { time: 1, window: 3 }, { time: 2, window: "-" }, { time: 3, window: 4 } ] };
   const a = parseCalculatorJson(JSON.stringify(snake));
   assert.equal(a.ok, true);
-  assert.equal(a.ignored, 1, "one ignored row");
-  assert.deepEqual(a.inputs, [{ t: 1, k: 3 }, { t: 3, k: 4 }]);
+  assert.equal(a.ignored, 1, "one ignored row counted");
+  // ignored rows are KEPT (k:null) — their time position still shapes attempt timing
+  assert.equal(a.inputs.length, 3);
+  assert.equal(a.inputs[1].k, null, "'-' window becomes an ignored input");
 
   // bare array of [time, window] pairs
   const b = parseCalculatorJson(JSON.stringify([[1.5, 3], [2.1, 5]]));
   assert.equal(b.ok, true);
-  assert.deepEqual(b.inputs, [{ t: 1.5, k: 3 }, { t: 2.1, k: 5 }]);
+  assert.deepEqual(b.inputs.map(i => [i.t, i.k]), [[1.5, 3], [2.1, 5]]);
 
   // failures are reported, not thrown
   assert.equal(parseCalculatorJson("not json").ok, false);
@@ -307,5 +310,66 @@ test("buildCalculatorJson round-trips through parseCalculatorJson", () => {
 
   const back = parseCalculatorJson(JSON.stringify(doc));
   assert.equal(back.ok, true);
-  assert.deepEqual(back.inputs, inputs);
+  assert.deepEqual(back.inputs.map(i => ({ t: i.t, k: i.k })), inputs);
+});
+
+/* ===================== features matching the official calculator ============ */
+
+test("respawn time adds exactly R to every attempt", () => {
+  const inputs = [ { t: 1.9, k: 2 }, { t: 2.3, k: 6 }, { t: 2.4, k: 19 } ];
+  const base = { inputs, f: F, T, mods: modsOff };
+  const L = 5;
+  const a = evaluate(L, base);
+  const b = evaluate(L, { ...base, respawn: 1.5 });
+  // Σ rᵢqᵢ + P(C) = 1, so respawn contributes exactly R per attempt
+  approxRel(b.ETA, a.ETA + 1.5, 1e-12, "E[T_A] + R");
+  approxRel(b.ETC, (a.ETA + 1.5) / a.PC, 1e-12, "E[T_C] scales with it");
+  approxRel(b.PC, a.PC, 1e-12, "P(C) unchanged");
+  // more respawn => more precision needed to hit the same target
+  const L0 = solveLstar(base, TARGET_SEC);
+  const L1 = solveLstar({ ...base, respawn: 5 }, TARGET_SEC);
+  assert.ok(L1 > L0, `respawn should raise L* (${L0} -> ${L1})`);
+});
+
+test("ignored windows pass for free, or become maxWindow+1 under CPS", () => {
+  const inputs = [ { t: 1, k: 4 }, { t: 2, k: null }, { t: 3, k: 9 } ];
+  const L = 30;
+
+  // CPS off: the ignored input has p = 1 exactly
+  const off = perInputStats(L, { inputs, f: F, T, mods: modsOff });
+  assert.equal(off[1].p, 1, "ignored input always passes");
+  assert.equal(off[1].kEff, null, "no effective window");
+  assert.equal(off[1].ignored, true);
+  // ...so P(C) equals the product over the two real inputs
+  const only = evaluate(L, { inputs: [inputs[0], inputs[2]], f: F, T, mods: modsOff });
+  approxRel(evaluate(L, { inputs, f: F, T, mods: modsOff }).PC, only.PC, 1e-12, "P(C) ignores it");
+
+  // CPS on: it takes one more than the largest numeric window (9 -> 10)
+  const cpsOn = { nerve:{on:false,k:0}, fatigue:{on:false,k:0}, cps:{on:true,k:NANDL_CONSTANTS.cps} };
+  const on = perInputStats(L, { inputs, f: F, T, mods: cpsOn });
+  assert.equal(on[1].kEff, 10, "maxWindow + 1");
+  assert.ok(on[1].p < 1, "now it can be missed");
+});
+
+test("input numbers drive fatigue and local CPS", () => {
+  // same times/windows, but the middle input is numbered 5 instead of 2
+  const plain   = [ { t: 1, k: 4, n: 1 }, { t: 2, k: 4, n: 2 }, { t: 3, k: 4, n: 3 } ];
+  const skipped = [ { t: 1, k: 4, n: 1 }, { t: 2, k: 4, n: 5 }, { t: 3, k: 4, n: 6 } ];
+  const L = 40;
+
+  const fat = { nerve:{on:false,k:0}, fatigue:{on:true,k:0.2}, cps:{on:false,k:0} };
+  const pPlain = perInputStats(L, { inputs: plain,   f: F, T, mods: fat });
+  const pSkip  = perInputStats(L, { inputs: skipped, f: F, T, mods: fat });
+  assert.ok(pSkip[1].p < pPlain[1].p, "higher input number => more fatigue => lower p");
+
+  // local CPS uses (i − i′)/(t_i − t_i′): numbering gaps raise the click rate
+  assert.equal(localCps(plain, 1, T), 1, "consecutive numbers => 1/gap");
+  assert.equal(localCps(skipped, 1, T), 4, "(5−1)/(2−1) = 4 clicks/sec");
+});
+
+test("evaluate exposes attempt stats for fixed-precision mode", () => {
+  const inputs = [ { t: 1.9, k: 2 }, { t: 2.3, k: 6 } ];
+  const r = evaluate(10, { inputs, f: F, T, mods: modsOff });
+  approxRel(r.attempts, 1 / r.PC, 1e-12, "attempts = 1/P(C)");
+  approxRel(r.ETC, r.ETA / r.PC, 1e-12, "E[T_C] = E[T_A]/P(C)");
 });

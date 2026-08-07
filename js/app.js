@@ -10,11 +10,26 @@ import { MAXW, histInputs, evaluate, solveLstar, perInputStats, sliceRun, diffic
 
 let mode="hist";
 let unit="sec";
+let calcMode="solve";
 let restoring=false;   // true while applying URL state, to suppress hash writes
 let lastProfile=null;  // latest difficulty-curve samples, for hover readout
 
 const $ = id => document.getElementById(id);
 function num(id){const v=parseFloat($(id).value); return isNaN(v)?0:v;}
+
+// Time-unit conversion. Seconds are the canonical internal unit; % is a share of
+// the level length and Frames is a game-frame index converted via Game FPS.
+function toSec(v,u,T){
+  if(u==='pct')    return T>0 ? v/100*T : 0;
+  if(u==='frames'){ const g=num('gameFps'); return g>0 ? v/g : 0; }
+  return v;
+}
+function fromSec(v,u,T){
+  if(u==='pct')    return T>0 ? v/T*100 : 0;
+  if(u==='frames'){ const g=num('gameFps'); return v*g; }
+  return v;
+}
+const unitLabel = u => u==='pct' ? '%' : (u==='frames' ? 'f' : 's');
 
 // ---- histogram grid --------------------------------------------------------
 const grid=$('grid');
@@ -28,11 +43,13 @@ for(let k=1;k<=MAXW;k++){
 
 // ---- manual rows -----------------------------------------------------------
 const manualBody=$('manualBody');
-function addRow(time,frames){
+function addRow(time,frames,number){
   const tr=document.createElement('tr');
+  const n = number ?? (manualBody.children.length+1);
   tr.innerHTML=`
+    <td><input type="number" class="mNum" step="1" min="1" value="${n}"></td>
     <td><input type="number" class="mTime" step="0.01" min="0" value="${time??''}"></td>
-    <td><input type="number" class="mWin" step="1" min="1" value="${frames??''}"></td>
+    <td><input type="text" class="mWin" inputmode="decimal" placeholder="- = ignored" value="${frames??''}"></td>
     <td class="mMs" style="font-size:11px;color:#5b6675">—</td>
     <td><button class="del">&times;</button></td>`;
   tr.querySelector('.del').addEventListener('click',()=>{tr.remove(); recompute();});
@@ -50,7 +67,7 @@ function applyModeUI(m){
 function applyUnitUI(u){
   unit=u;
   document.querySelectorAll('#unitSeg button').forEach(x=>x.classList.toggle('active',x.dataset.unit===u));
-  const label = u==='pct' ? '%' : 's';
+  const label = unitLabel(u);
   $('unitLabelHead').textContent=label;
   document.querySelectorAll('.unitLabel').forEach(el=>el.textContent=label);
 }
@@ -63,19 +80,30 @@ $('unitSeg').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b || b.dataset.unit===unit) return;
   const newUnit=b.dataset.unit;
   const T=num('tlen');
-  const conv = v => newUnit==='pct' ? +(v/T*100).toFixed(4) : +(v/100*T).toFixed(4);
-  if(T>0){
-    // convert manual row times so real times stay fixed
-    document.querySelectorAll('#manualBody .mTime').forEach(inp=>{
-      const v=parseFloat(inp.value); if(!isNaN(v)) inp.value=conv(v);
-    });
-    // convert the run range's two numbers too
-    const rng=parseRange($('runRange').value);
-    if(rng) $('runRange').value = `${conv(rng[0])} - ${conv(rng[1])}`;
-  }
+  const conv = v => +fromSec(toSec(v,unit,T), newUnit, T).toFixed(4);
+  // convert manual row times so the real times stay fixed
+  document.querySelectorAll('#manualBody .mTime').forEach(inp=>{
+    const v=parseFloat(inp.value); if(!isNaN(v)) inp.value=conv(v);
+  });
+  // convert the run range's two numbers too
+  const rng=parseRange($('runRange').value);
+  if(rng) $('runRange').value = `${conv(rng[0])} - ${conv(rng[1])}`;
   applyUnitUI(newUnit);
   recompute();
 });
+
+// calculation mode: solve for L*, or report stats at a fixed precision
+$('calcSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  applyCalcUI(b.dataset.calc);
+  recompute();
+});
+function applyCalcUI(m){
+  calcMode = m==='fixed' ? 'fixed' : 'solve';
+  document.querySelectorAll('#calcSeg button').forEach(x=>x.classList.toggle('active',x.dataset.calc===calcMode));
+  $('targetField').classList.toggle('hidden', calcMode!=='solve');
+  $('skillField').classList.toggle('hidden', calcMode!=='fixed');
+}
 
 // ---- fps presets + validation ----------------------------------------------
 $('fpsPresets').addEventListener('click',e=>{
@@ -158,19 +186,21 @@ function importJson(text){
   }
   // window FPS is the timing-window rate = our fps
   if(res.windowFps>0) $('fps').value=res.windowFps;
+  if(res.gameFps>0) $('gameFps').value=res.gameFps;
+  $('respawn').value=res.respawnTime||0;
   // the official model's t_n is the last input time; match it as our level length
   const last=res.inputs[res.inputs.length-1].t;
   if(last>0) $('tlen').value=+last.toFixed(6);
   // rows are written in seconds; switch the unit control to match
   applyUnitUI('sec');
   manualBody.innerHTML='';
-  res.inputs.forEach(inp=>addRow(+inp.t.toFixed(6), inp.k));
+  res.inputs.forEach((inp,i)=>addRow(+inp.t.toFixed(6), inp.k==null?'-':inp.k, inp.n??(i+1)));
   applyModeUI('manual');
 
   const notes=[];
-  if(res.ignored>0) notes.push(`${res.ignored} ignored-window row${res.ignored>1?'s':''} skipped`);
-  if(res.respawnTime>0) notes.push(`respawn time ${res.respawnTime}s not modelled`);
-  if(res.useFrames) notes.push(`frame positions converted at ${res.gameFps} fps`);
+  if(res.ignored>0) notes.push(`${res.ignored} ignored window${res.ignored>1?'s':''}`);
+  if(res.respawnTime>0) notes.push(`respawn ${res.respawnTime}s`);
+  if(res.useFrames) notes.push(`frame positions read at ${res.gameFps} fps`);
   status.style.color='var(--good)';
   status.textContent=`Imported ${res.inputs.length} input${res.inputs.length>1?'s':''} from JSON`+
     (notes.length?` (${notes.join('; ')}).`:'.');
@@ -183,7 +213,7 @@ $('exportJsonBtn').addEventListener('click',()=>{
     status.style.color='var(--warn)'; status.textContent='Nothing to export — add some inputs first.';
     return;
   }
-  const doc=buildCalculatorJson({inputs, fps:num('fps')||240});
+  const doc=buildCalculatorJson({inputs, fps:num('fps')||240, respawnTime:Math.max(0,num('respawn'))});
   download(JSON.stringify(doc,null,2),'application/json','nandl-run.json');
   status.style.color='var(--good)';
   status.textContent=`Exported ${inputs.length} input${inputs.length>1?'s':''} as JSON.`;
@@ -235,17 +265,18 @@ function anyModOn(m){ return m.nerve.on || m.fatigue.on || m.cps.on; }
 function readManual(T){
   const rows=[...document.querySelectorAll('#manualBody tr')];
   const inputs=[];
+  const f=num('fps');
   rows.forEach(tr=>{
     const tv=parseFloat(tr.querySelector('.mTime').value);
-    const kv=parseFloat(tr.querySelector('.mWin').value);
+    const wRaw=tr.querySelector('.mWin').value.trim();
+    const nv=parseFloat(tr.querySelector('.mNum').value);
     const msCell=tr.querySelector('.mMs');
-    if(!isNaN(kv) && kv>=1 && !isNaN(tv) && tv>=0){
-      const tSec = unit==='pct' ? (tv/100*T) : tv;
-      inputs.push({t:tSec,k:kv});
-      msCell.textContent = (num('fps')>0)?(1000*kv/num('fps')).toFixed(2)+'ms':'—';
-    } else {
-      msCell.textContent='—';
-    }
+    if(isNaN(tv) || tv<0 || wRaw===''){ msCell.textContent='—'; return; }
+    const ignored = wRaw==='-';
+    const kv = ignored ? NaN : parseFloat(wRaw);
+    if(!ignored && (isNaN(kv) || kv<=0)){ msCell.textContent='—'; return; }
+    inputs.push({t: toSec(tv,unit,T), k: ignored?null:kv, n: isNaN(nv)?undefined:nv});
+    msCell.textContent = ignored ? 'ignored' : (f>0 ? (1000*kv/f).toFixed(2)+'ms' : '—');
   });
   inputs.sort((a,b)=>a.t-b.t);
   return inputs;
@@ -253,25 +284,37 @@ function readManual(T){
 
 // ---- per-input breakdown ---------------------------------------------------
 function fmtProb(v){ return v<1e-4 ? v.toExponential(1) : (v*100).toFixed(2)+'%'; }
+function fmtHours(h){
+  if(!isFinite(h)) return '∞';
+  if(h>=1e6) return h.toExponential(2)+' h';
+  if(h<0.01) return (h*3600).toFixed(1)+' s';
+  return h.toFixed(2)+' h';
+}
+function fmtCount(v){
+  if(!isFinite(v)) return '∞';
+  return v>=1e5 ? v.toExponential(2) : Math.round(v).toLocaleString();
+}
 function renderBreakdown(Lstar,cfg,Teff,runActive,rangeLabel){
   const bd=$('breakdown'), body=$('bdBody');
   const per=perInputStats(Lstar,cfg);
   body.innerHTML='';
   if(per.length===0){ bd.classList.add('hidden'); return; }
   const f=num('fps');
-  const minP=Math.min(...per.map(s=>s.p));
+  const real=per.filter(s=>!s.ignored);
+  const minP=real.length?Math.min(...real.map(s=>s.p)):1;
   const weakCut=minP*1.02;   // within 2% of the hardest input
   per.forEach((s,i)=>{
     const tr=document.createElement('tr');
     const pctPos=Teff>0 ? (s.t/Teff*100).toFixed(1)+'%' : '—';
-    const ms=f>0 ? (1000*s.k/f).toFixed(2) : '—';
+    const kShown = s.ignored ? (s.kEff===null?'—':s.kEff) : s.k;
+    const ms=(f>0 && kShown!=='—') ? (1000*kShown/f).toFixed(2) : '—';
     const pClass=s.p>=0.9?'':(s.p>=0.5?'low':'vlow');
-    const weak=s.p<=weakCut;
+    const weak=s.p<=weakCut && !s.ignored;
     if(weak) tr.className='weak';
-    tr.innerHTML=`<td>${i+1}</td>
+    tr.innerHTML=`<td>${s.n}</td>
       <td>${s.t.toFixed(2)}</td>
       <td>${pctPos}</td>
-      <td>${s.k}f</td>
+      <td>${s.ignored?`<span style="color:var(--muted)">${kShown==='—'?'ignored':kShown+'f*'}</span>`:kShown+'f'}</td>
       <td>${ms}</td>
       <td class="pbar ${pClass}">${fmtProb(s.p)}${weak?' <span class="weak-tag">weak</span>':''}</td>
       <td>${fmtProb(s.r)}</td>`;
@@ -339,12 +382,16 @@ function renderDifficulty(inputs,T,run){
   }
   $('diffAxis').innerHTML=axis;
 
-  const tight=inputs.reduce((a,b)=> b.k<a.k?b:a, inputs[0]);
+  // ignored rows have no window of their own — exclude them from "tightest"
+  const real=inputs.filter(i=>i.k>0);
+  const tight=real.length?real.reduce((a,b)=> b.k<a.k?b:a):null;
   const f=num('fps');
-  const tightMs=f>0 ? (1000*tight.k/f).toFixed(1)+' ms' : '—';
+  const tightTxt = tight
+    ? `tightest window <b>${tight.k}f</b> (~${f>0?(1000*tight.k/f).toFixed(1)+' ms':'—'})`
+    : 'no timed windows';
   const modNote=anyModOn(mods) ? ` <span style="color:var(--accent)">Modifiers applied.</span>` : '';
   $('diffCaption').innerHTML=`Relative difficulty across the level — higher = tighter windows and/or denser inputs. `+
-    `Hardest around <b>${prof.peakXPct.toFixed(0)}%</b>; tightest window <b>${tight.k}f</b> (~${tightMs}).${modNote}`;
+    `Hardest around <b>${prof.peakXPct.toFixed(0)}%</b>; ${tightTxt}.${modNote}`;
 
   lastProfile={xs:prof.xs, ys:prof.ys, xmax:prof.xmax};
 }
@@ -433,24 +480,42 @@ function recompute(){
   if(!(f>0)) return show('Enter a frame rate greater than 0.');
   if($('runOn').checked && !runValid) return show('Enter a valid run range like "23.2 - 81.8".');
   if(inputs.length===0) return show(runActive?'No inputs fall inside the run range.':'Add at least one input.');
-  if(!(targetH>0)) return show('Enter a target time greater than 0.');
 
   const mods=readMods();
-  const cfg={inputs, f, T:Teff, mods};
-  const targetSec=targetH*3600;
-  const Lstar=solveLstar(cfg,targetSec);
-  const chk=evaluate(Lstar,cfg);
-
-  big.textContent=Lstar.toLocaleString(undefined,{maximumFractionDigits:1});
-  rsub.className='rsub';
+  const cfg={inputs, f, T:Teff, mods, respawn:Math.max(0,num('respawn'))};
   const what = runActive ? `run (${rangeLabel})` : 'level';
-  rsub.innerHTML=`Precision required to average a <b>${targetH}-hour</b> completion of this ${inputs.length}-input ${what}.`;
-  stats.style.display='flex';
-  $('sigma').textContent=(1000/Lstar).toFixed(2)+' ms';
-  $('pc').textContent=chk.PC<1e-4?chk.PC.toExponential(2):(chk.PC*100).toFixed(3)+'%';
-  $('etc').textContent=(chk.ETC/3600).toFixed(2)+' h';
 
-  renderBreakdown(Lstar,cfg,Teff,runActive,rangeLabel);
+  let L, chk;
+  if(calcMode==='fixed'){
+    L=num('skill');
+    if(!(L>0)) return show('Enter a precision greater than 0.');
+    chk=evaluate(L,cfg);
+    $('rlabel').textContent='Expected time to complete';
+    $('sigmaLabel').innerHTML='timing window &sigma; = 1/L';
+    big.textContent = isFinite(chk.ETC) ? fmtHours(chk.ETC/3600) : '∞';
+    rsub.className='rsub';
+    rsub.innerHTML=`At precision <b>${L.toLocaleString(undefined,{maximumFractionDigits:2})}</b> on this `+
+      `${inputs.length}-input ${what}.`;
+  } else {
+    const targetH=num('target');
+    if(!(targetH>0)) return show('Enter a target time greater than 0.');
+    L=solveLstar(cfg,targetH*3600);
+    chk=evaluate(L,cfg);
+    $('rlabel').innerHTML='Required Precision &nbsp;L*';
+    $('sigmaLabel').innerHTML='timing window &sigma; = 1/L*';
+    big.textContent=L.toLocaleString(undefined,{maximumFractionDigits:1});
+    rsub.className='rsub';
+    rsub.innerHTML=`Precision required to average a <b>${targetH}-hour</b> completion of this ${inputs.length}-input ${what}.`;
+  }
+
+  stats.style.display='flex';
+  $('sigma').textContent=(1000/L).toFixed(2)+' ms';
+  $('pc').textContent=chk.PC<1e-4?chk.PC.toExponential(2):(chk.PC*100).toFixed(3)+'%';
+  $('attempts').textContent=isFinite(chk.attempts)?fmtCount(chk.attempts):'∞';
+  $('eta').textContent=chk.ETA.toFixed(2)+' s';
+  $('etc').textContent=isFinite(chk.ETC)?fmtHours(chk.ETC/3600):'∞';
+
+  renderBreakdown(L,cfg,Teff,runActive,rangeLabel);
 }
 
 // ---- URL-shareable state (no browser storage — state lives in the hash) ----
@@ -462,8 +527,9 @@ function serialize(){
   });
   const rows=[];
   document.querySelectorAll('#manualBody tr').forEach(tr=>{
-    const t=tr.querySelector('.mTime').value, w=tr.querySelector('.mWin').value;
-    if(t!=='' || w!=='') rows.push([t,w]);
+    const t=tr.querySelector('.mTime').value, w=tr.querySelector('.mWin').value,
+          n=tr.querySelector('.mNum').value;
+    if(t!=='' || w!=='') rows.push([t,w,n]);
   });
   return {
     m:mode, u:unit,
@@ -474,6 +540,8 @@ function serialize(){
     h:hist, r:rows,
     run:[$('runOn').checked?1:0, $('runRange').value],
     sm:$('smooth').value,
+    gf:$('gameFps').value, rs:$('respawn').value,
+    cm:calcMode, sk:$('skill').value,
   };
 }
 function updateHash(){
@@ -499,13 +567,17 @@ function restore(){
     document.querySelectorAll('#grid input').forEach(inp=>{ inp.value = (st.h&&st.h[inp.dataset.w]!=null)?st.h[inp.dataset.w]:0; });
     // manual rows
     manualBody.innerHTML='';
-    (st.r||[]).forEach(([t,w])=>addRow(t,w));
+    (st.r||[]).forEach(([t,w,n],i)=>addRow(t,w,n??(i+1)));
+    if(st.gf!=null) $('gameFps').value=st.gf;
+    if(st.rs!=null) $('respawn').value=st.rs;
+    if(st.sk!=null) $('skill').value=st.sk;
     // run
     if(st.run){ $('runOn').checked=!!st.run[0]; $('runRange').value=st.run[1]??''; }
     if(st.sm!=null) $('smooth').value=st.sm;
     // apply unit + mode UI directly (no value conversion — values are stored as displayed)
-    applyUnitUI(st.u==='pct'?'pct':'sec');
+    applyUnitUI(['pct','frames'].includes(st.u)?st.u:'sec');
     applyModeUI(st.m==='manual'?'manual':'hist');
+    applyCalcUI(st.cm==='fixed'?'fixed':'solve');
   } finally { restoring=false; }
   return true;
 }

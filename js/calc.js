@@ -65,13 +65,39 @@ export function histInputs(counts,T){
   return seq.map((k,j)=>({t:(j+0.5)*dt,k}));
 }
 
-// Local clicks/sec at input j (1/gap to the previous input; first uses the next).
+// Input number of row j (official notation `i`, 1-based). Falls back to the row
+// position when a list carries no explicit numbers.
+export function inputNumber(inputs,j){
+  const n = inputs[j] && inputs[j].n;
+  return (typeof n==='number' && isFinite(n)) ? n : (j+1);
+}
+
+// Local clicks/sec at input j — official: c_i = (i − i′)/(t_i − t_i′), where i′ is
+// the previous input. The numerator counts the clicks since that input (which is
+// why it uses input numbers, not 1), so skipped/ignored numbering widens the gap.
+// Consecutively numbered inputs reduce to the familiar 1/gap.
 export function localCps(inputs,j,T){
   const n=inputs.length;
   if(n===1) return T>0?1/T:0;
-  let gap = j===0 ? (inputs[1].t-inputs[0].t) : (inputs[j].t-inputs[j-1].t);
+  const a = j===0 ? 0 : j-1, b = j===0 ? 1 : j;
+  let gap = inputs[b].t - inputs[a].t;
   if(!(gap>0)) gap=1e-6;
-  return 1/gap;
+  let dn = inputNumber(inputs,b) - inputNumber(inputs,a);
+  if(!(dn>0)) dn=1;
+  return dn/gap;
+}
+
+// Effective frame window for input j. A row with an ignored/default window
+// (k null/"-") passes automatically — unless CPS is on, where the official
+// calculator substitutes one more than the run's largest numeric window.
+// Returns null to mean "always passes".
+export function effectiveWindow(inputs,j,mods){
+  const k = inputs[j] && inputs[j].k;
+  if(typeof k==='number' && isFinite(k) && k>0) return k;
+  if(!(mods && mods.cps && mods.cps.on)) return null;
+  let max=0;
+  for(const inp of inputs){ if(typeof inp.k==='number' && isFinite(inp.k) && inp.k>max) max=inp.k; }
+  return max+1;
 }
 
 // Per-input effective pass probabilities with modifiers applied. Shared by
@@ -82,9 +108,11 @@ function passProbs(L,cfg){
   const ps=new Array(M);
   for(let j=0;j<M;j++){
     const inp=inputs[j];
-    let s=0.5*(inp.k/f)*L;
+    const k=effectiveWindow(inputs,j,mods);
+    if(k===null){ ps[j]=1; continue; }          // ignored window -> always passes
+    let s=0.5*(k/f)*L;
     if(mods.nerve.on)   s*=Math.exp(-mods.nerve.k*inp.t);
-    if(mods.fatigue.on) s*=Math.exp(-mods.fatigue.k*(j+1));
+    if(mods.fatigue.on) s*=Math.exp(-mods.fatigue.k*inputNumber(inputs,j));
     if(mods.cps.on){ const c=localCps(inputs,j,T); s*=Math.pow(4/Math.max(1,2*c),mods.cps.k); }
     ps[j]=passProb(s);
   }
@@ -93,31 +121,35 @@ function passProbs(L,cfg){
 
 // Compute E[T_C] (expected time to complete) and P(C) for a precision L.
 // inputs must be sorted ascending by t. cfg = { inputs:[{t,k}], f, T, mods }.
+// Respawn time R is added to every attempt. Adding it to each time position is
+// equivalent, since Σ rᵢqᵢ + P(C) = 1, so it contributes exactly R per attempt.
 export function evaluate(L,cfg){
-  const {inputs,T}=cfg;
+  const {inputs,T,respawn=0}=cfg;
   const M=inputs.length;
-  if(M===0) return {ETC:Infinity,PC:0};
+  if(M===0) return {ETC:Infinity,PC:0,ETA:respawn,attempts:Infinity};
   const tn=Math.max(T, inputs[M-1].t);
   const ps=passProbs(L,cfg);
   let logPC=0; for(let j=0;j<M;j++) logPC+=Math.log(ps[j]);
   const PC=Math.exp(logPC);
   let r=1,sumFail=0;
   for(let j=0;j<M;j++){ sumFail+=inputs[j].t*r*(1-ps[j]); r*=ps[j]; }
-  const ETA=tn*PC+sumFail;
-  return {ETC: PC>0?ETA/PC:Infinity, PC};
+  const ETA=tn*PC+sumFail+respawn;
+  return {ETC: PC>0?ETA/PC:Infinity, PC, ETA, attempts: PC>0?1/PC:Infinity};
 }
 
 // Per-input breakdown at precision L: for each input, its pass prob p, reach
 // prob r = ∏_{l<j} p_l (prob of arriving at it alive), and q = 1 - p. The arrays
 // evaluate() computes internally and discards — surfaced for the breakdown table.
 export function perInputStats(L,cfg){
-  const {inputs}=cfg;
+  const {inputs,mods}=cfg;
   const M=inputs.length;
   const ps=passProbs(L,cfg);
   const out=new Array(M);
   let r=1;
   for(let j=0;j<M;j++){
-    out[j]={t:inputs[j].t, k:inputs[j].k, p:ps[j], r, q:1-ps[j]};
+    const kEff=effectiveWindow(inputs,j,mods);
+    out[j]={t:inputs[j].t, k:inputs[j].k, kEff, ignored:!(inputs[j].k>0),
+            n:inputNumber(inputs,j), p:ps[j], r, q:1-ps[j]};
     r*=ps[j];
   }
   return out;
@@ -144,7 +176,7 @@ export function sliceRun(inputs,startSec,endSec){
   const eps=1e-9;
   return inputs
     .filter(inp=> inp.t>=lo-eps && inp.t<=hi+eps)
-    .map(inp=>({t: inp.t-lo, k: inp.k}))
+    .map(inp=>({t: inp.t-lo, k: inp.k, n: inp.n}))
     .sort((a,b)=>a.t-b.t);
 }
 
@@ -165,13 +197,14 @@ export function difficultyProfile(inputs, T, mods, opts={}){
   const pts = [];
   if(T>0) for(let i=0;i<inputs.length;i++){
     const inp=inputs[i];
-    if(!(inp.k>0)) continue;
+    const k=effectiveWindow(inputs,i,m);
+    if(k===null) continue;                  // ignored window contributes no difficulty
     let lambda=1;
     if(m.nerve   && m.nerve.on)   lambda *= Math.exp(-m.nerve.k*inp.t);
-    if(m.fatigue && m.fatigue.on) lambda *= Math.exp(-m.fatigue.k*(i+1));
+    if(m.fatigue && m.fatigue.on) lambda *= Math.exp(-m.fatigue.k*inputNumber(inputs,i));
     if(m.cps     && m.cps.on){ const c=localCps(inputs,i,T); lambda *= Math.pow(4/Math.max(1,2*c), m.cps.k); }
     if(!(lambda>0)) lambda=1e-9;
-    pts.push({x: inp.t/T*100, d: (1/inp.k)/lambda});
+    pts.push({x: inp.t/T*100, d: (1/k)/lambda});
   }
   const xmax = Math.max(100, ...pts.map(p=>p.x), 0);
   const xs = new Array(samples+1), ys = new Array(samples+1);
@@ -280,15 +313,18 @@ export function parseCalculatorJson(text){
 
     // "-" / "" / null mark an ignored (default) frame window upstream
     const kStr = kRaw===undefined || kRaw===null ? '' : String(kRaw).trim();
-    const k = kStr==='' || kStr==='-' ? NaN : parseFloat(kStr);
-    if(!isFinite(k) || k<=0){ ignored++; continue; }
+    const kNum = kStr==='' || kStr==='-' ? NaN : parseFloat(kStr);
+    const isIgnored = !isFinite(kNum) || kNum<=0;
+    if(isIgnored) ignored++;
 
     // frame-number positions convert to seconds via Game FPS
     const tSec = useFrames && gameFps>0 ? t/gameFps : t;
     if(tSec<0) continue;
-    inputs.push({t:tSec, k});
+    const nRaw = Array.isArray(row) ? row[2] : pick(row, NUM_KEYS);
+    const n = nRaw===undefined ? undefined : parseFloat(String(nRaw));
+    inputs.push({t:tSec, k: isIgnored ? null : kNum, n: isFinite(n)?n:undefined});
   }
-  if(inputs.length===0) return {ok:false, error:'No usable inputs (rows had no valid time/window pair).'};
+  if(inputs.length===0) return {ok:false, error:'No usable inputs (rows had no valid time position).'};
   inputs.sort((a,b)=>a.t-b.t);
   return {ok:true, gameFps, windowFps, respawnTime:respawn, useFrames, inputs, ignored, rowCount:rows.length};
 }
@@ -303,9 +339,9 @@ export function buildCalculatorJson({inputs, fps, respawnTime=0}={}){
     respawnTime,
     useFrames: false,
     inputs: list.map((inp,i)=>({
-      inputNumber: i+1,
+      inputNumber: (typeof inp.n==='number' && isFinite(inp.n)) ? inp.n : i+1,
       timePosition: inp.t,
-      frameWindow: inp.k,
+      frameWindow: (typeof inp.k==='number' && isFinite(inp.k) && inp.k>0) ? inp.k : '-',
     })),
   };
 }

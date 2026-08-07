@@ -60,7 +60,7 @@
     <h2>Setup</h2>
     <div class="row">
       <div class="field">
-        <label>Frame rate (fps)</label>
+        <label>Window FPS</label>
         <input type="number" id="fps" value="240" min="1" step="1">
         <div class="presets" id="fpsPresets">
           <button type="button" data-fps="120">120</button>
@@ -70,14 +70,38 @@
         <div class="hint" id="fpsHint">1 frame = 1/fps seconds</div>
       </div>
       <div class="field">
+        <label>Game FPS</label>
+        <input type="number" id="gameFps" value="240" min="0.01" step="1">
+        <div class="hint">used when time positions are entered as frames</div>
+      </div>
+      <div class="field">
         <label>Level length (seconds)</label>
         <input type="number" id="tlen" value="60" min="0.1" step="0.5">
         <div class="hint">total level time; also used for % positions</div>
       </div>
+    </div>
+    <div class="row" style="margin-top:14px">
       <div class="field">
+        <label>Respawn time (seconds)</label>
+        <input type="number" id="respawn" value="0" min="0" step="0.1">
+        <div class="hint">added to every attempt</div>
+      </div>
+      <div class="field">
+        <label>Calculation</label>
+        <div class="seg" id="calcSeg" style="margin-top:2px">
+          <button data-calc="solve" class="active">Solve precision</button>
+          <button data-calc="fixed">Fixed precision</button>
+        </div>
+      </div>
+      <div class="field" id="targetField">
         <label>Target time (hours)</label>
         <input type="number" id="target" value="24" min="0.001" step="1">
         <div class="hint">precision is solved for this expected time</div>
+      </div>
+      <div class="field hidden" id="skillField">
+        <label>Precision (&sigma;/s)</label>
+        <input type="number" id="skill" value="100" min="0.0001" step="any">
+        <div class="hint">stats are computed at this fixed precision</div>
       </div>
     </div>
   </div>
@@ -104,6 +128,7 @@
           <div class="seg" id="unitSeg">
             <button data-unit="sec" class="active">Seconds</button>
             <button data-unit="pct">%</button>
+            <button data-unit="frames">Frames</button>
           </div>
         </div>
       </div>
@@ -120,9 +145,10 @@
       </div>
       <table class="manual">
         <thead><tr>
-          <th style="width:34%">Time (<span id="unitLabelHead">s</span>)</th>
-          <th style="width:34%">Window (frames)</th>
-          <th style="width:20%">ms</th>
+          <th style="width:12%">#</th>
+          <th style="width:29%">Time (<span id="unitLabelHead">s</span>)</th>
+          <th style="width:29%">Window (frames)</th>
+          <th style="width:18%">ms</th>
           <th style="width:12%"></th>
         </tr></thead>
         <tbody id="manualBody"></tbody>
@@ -171,12 +197,14 @@
   </div>
 
   <div class="result" id="result">
-    <div class="rlabel">Required Precision &nbsp;L*</div>
+    <div class="rlabel" id="rlabel">Required Precision &nbsp;L*</div>
     <div class="big" id="lstar">—</div>
     <div class="rsub" id="rsub">Enter a level length and at least one input.</div>
     <div class="stats" id="stats" style="display:none">
-      <div class="stat"><div class="v" id="sigma">—</div><div class="l">timing window &sigma; = 1/L*</div></div>
-      <div class="stat"><div class="v" id="pc">—</div><div class="l">P(C) per attempt at L*</div></div>
+      <div class="stat"><div class="v" id="sigma">—</div><div class="l" id="sigmaLabel">timing window &sigma; = 1/L*</div></div>
+      <div class="stat"><div class="v" id="pc">—</div><div class="l">P(C) per attempt</div></div>
+      <div class="stat"><div class="v" id="attempts">—</div><div class="l">expected attempts</div></div>
+      <div class="stat"><div class="v" id="eta">—</div><div class="l">time per attempt</div></div>
       <div class="stat"><div class="v" id="etc">—</div><div class="l">expected time to complete</div></div>
     </div>
   </div>
@@ -238,6 +266,19 @@
       <p><b>Manual list</b> — you give each input's exact time and window, so ordering, gaps and per-input positions are
       taken directly from your data (nothing is scattered evenly). The <b>Seconds / %</b> switch reads times either as
       seconds or as a percentage of the level length, where % grows evenly across the level (50% = halfway in time).</p>
+
+      <h4>Run settings</h4>
+      <p><b>Window FPS</b> is the timing-window rate (<code>w&#8341; = N&#8341;/fps</code>). <b>Game FPS</b> only converts
+      time positions when the <b>Frames</b> unit is selected. <b>Respawn time</b> is added to every attempt — because
+      <code>&sum;r&#8341;q&#8341; + P(C) = 1</code>, it contributes exactly its own value per attempt.</p>
+      <p>A row's window may be <code>-</code> to mark it <b>ignored</b>: it passes automatically, though its time
+      position still counts toward attempt timing. With CPS enabled it instead takes one more than the run's largest
+      numeric window, matching the official calculator. The <b>#</b> column is the input number <code>i</code>, which
+      drives Fatigue (<code>e^(&minus;k&middot;i)</code>) and the local CPS numerator
+      (<code>c&#8341; = (i &minus; i&prime;)/(t&#8341; &minus; t&#8341;&prime;)</code>) — so non-consecutive numbering
+      models skipped clicks.</p>
+      <p><b>Fixed precision</b> mode reverses the calculation: instead of solving for L*, it reports P(C), expected
+      attempts and completion time at a precision you supply.</p>
 
       <h4>Run / segment</h4>
       <p>Turn on <b>Calculate a run</b> and give a range like <code>23.2 - 81.8</code> to score only the inputs inside

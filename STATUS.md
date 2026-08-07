@@ -13,7 +13,7 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 - ✅ **Refactored into files** — `index.html` + `css/styles.css` + `js/calc.js` (pure
   math) + `js/app.js` (UI). This is the live app.
 - ✅ **Regression tests** — `tests/calc.test.js`, Node's built-in runner (`npm test`,
-  zero deps). **20/20 pass**: the spec §6 values, the helper functions, JSON round-trips,
+  zero deps). **24/24 pass**: the spec §6 values, the helper functions, JSON round-trips,
   and a parity check against the official calculator's published equations.
 - ✅ **Feature set complete** — URL-shareable state, per-input breakdown, fps presets +
   validation, `.txt` export, run/segment scoring, and offline support (see below).
@@ -37,11 +37,16 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 | Feature | Where | Notes |
 |---|---|---|
 | **Refactor** (Step 1) | `index.html`, `css/`, `js/calc.js`, `js/app.js` | Behavior-preserving split; math is an importable ES module. |
-| **Regression tests** (Step 2) | `tests/calc.test.js` | `npm test` → 20/20, incl. an independent reimplementation of the official equations for parity. |
+| **Regression tests** (Step 2) | `tests/calc.test.js` | `npm test` → 24/24, incl. an independent reimplementation of the official equations for parity. |
 | **URL-shareable state** (Step 4) | `js/app.js` | Whole UI encoded in the `#s=` hash (base64 JSON); **Copy shareable link** button. No browser storage — state lives in the link. |
 | **Per-input breakdown** (Step 5) | `perInputStats()` + breakdown table | Each input's `p`/`reach` at L\*, time in **both seconds and %**, weakest inputs flagged & color-coded. |
 | **fps presets + validation** (Step 6) | Setup panel | 120 / 240 / 480 quick-select; blocks fps ≤ 0, warns on non-integer fps. |
 | **JSON interchange** | `parseCalculatorJson()` / `buildCalculatorJson()` | Import/Export JSON compatible with the official NaNDL calculator: frame-window rows plus `gameFps`, `windowFps`, `respawnTime`, `useFrames`. Frame-number positions convert via `gameFps`; ignored (`"-"`) windows are skipped and reported; key spellings matched loosely. |
+| **Respawn time** | `evaluate(cfg.respawn)` | Added to every attempt. Since `Σrᵢqᵢ + P(C) = 1` it contributes exactly R per attempt, so `E[T_A] += R` — raises L\* for the same target. |
+| **Game FPS + Frames unit** | Setup panel | Window FPS is the timing-window rate (`wᵢ = Nᵢ/fps`); Game FPS only converts positions when the new **Frames** time unit is selected. |
+| **Ignored windows** | `effectiveWindow()` | A `-` window passes automatically (p = 1) while its time position still counts toward attempt timing; under CPS it becomes `maxWindow + 1`, matching upstream. |
+| **Input numbers** | `inputNumber()` | The `#` column is the official `i`: it drives Fatigue `e^(−k·i)` and the local-CPS numerator `cᵢ = (i − i′)/(tᵢ − tᵢ′)`, so non-consecutive numbering models skipped clicks. |
+| **Fixed-precision mode** | `calcSeg` + `evaluate()` | Reverses the calculation: given a precision, report P(C), expected attempts, time per attempt and E[T_C]. `evaluate()` now also returns `ETA` and `attempts`. |
 | **Official constants** | `NANDL_CONSTANTS` | `k_t=0.0016520833717346`, `k_u=0.0002727763242154`, `k_c=0.2784421686721826` — the calibrated values from nandl.pages.dev, replacing the placeholders. Verified our `evaluate()` matches the official published equations to 1e-9. Fatigue's BROKEN? tag removed; CPS now tagged **WIP** (upstream still calls it unreliable). |
 | **`.txt` import / export** | `parseInputsText()` + Import/Export | Import accepts each line as `time`/`window` separated by a **dash, a tab, or spaces** (so spreadsheet-pasted `0.55⇥3` works alongside `1.5 - 3`), and an optional **unit label** on either number is ignored (`35.29 - 5f`, `35.29 - 5 frames`); export mirrors the `time - window` form and round-trips. |
 | **Run / segment** | `sliceRun()` + Run panel | A range like `23.2 - 81.8` scores only that slice as its own level (inputs re-based to start at 0, length = to − from). Range respects the Seconds/% switch; the hint and breakdown show **both units**. |
