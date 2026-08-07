@@ -110,9 +110,12 @@
       <div class="mtools">
         <button class="btn2" id="importBtn">&#8593; Import .txt</button>
         <button class="btn2" id="exportBtn">&#8595; Export .txt</button>
+        <button class="btn2" id="importJsonBtn">&#8593; Import JSON</button>
+        <button class="btn2" id="exportJsonBtn">&#8595; Export JSON</button>
         <button class="btn2 ghost" id="guideBtn">Format guide</button>
         <button class="btn2 danger" id="clearBtn">Clear all</button>
         <input type="file" id="fileInput" accept=".txt,text/plain" style="display:none">
+        <input type="file" id="jsonInput" accept=".json,application/json" style="display:none">
         <span class="imstatus" id="imStatus"></span>
       </div>
       <table class="manual">
@@ -146,24 +149,24 @@
   </div>
 
   <div class="panel">
-    <h2>Modifiers <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— off by default; constants are placeholders (the site does not publish them)</span></h2>
+    <h2>Modifiers <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— off by default; constants are the calibrated values from the official NaNDL calculator</span></h2>
 
     <div class="modrow">
       <label class="switch"><input type="checkbox" id="nerveOn"><span class="slider"></span></label>
       <div class="name"><b>Nerve</b><span class="desc">&lambda; = e^(&minus;k&middot;t): later inputs (in seconds) are shakier</span></div>
-      <div class="kf"><label>k_t (per sec)</label><input type="number" id="nerveK" value="0.0015" step="0.0005" min="0"></div>
+      <div class="kf"><label>k_t (per sec)</label><input type="number" id="nerveK" value="0.0016520833717346" step="any" min="0"></div>
     </div>
 
     <div class="modrow">
       <label class="switch"><input type="checkbox" id="fatigueOn"><span class="slider"></span></label>
-      <div class="name"><b>Fatigue</b><span class="badge">BROKEN?</span><span class="desc">&lambda; = e^(&minus;k&middot;i): later inputs (by index) degrade</span></div>
-      <div class="kf"><label>k_u (per input)</label><input type="number" id="fatigueK" value="0.00075" step="0.00025" min="0"></div>
+      <div class="name"><b>Fatigue</b><span class="desc">&lambda; = e^(&minus;k&middot;i): later inputs (by index) degrade</span></div>
+      <div class="kf"><label>k_u (per input)</label><input type="number" id="fatigueK" value="0.0002727763242154" step="any" min="0"></div>
     </div>
 
     <div class="modrow">
       <label class="switch"><input type="checkbox" id="cpsOn"><span class="slider"></span></label>
-      <div class="name"><b>CPS</b><span class="badge">BROKEN?</span><span class="desc">&lambda; = (4 / max(1, 2c))^k: fast clicking hurts precision</span></div>
-      <div class="kf"><label>k_c (exponent)</label><input type="number" id="cpsK" value="2" step="0.25" min="0"></div>
+      <div class="name"><b>CPS</b><span class="badge wip">WIP</span><span class="desc">&lambda; = (4 / max(1, 2c))^k: fast clicking hurts precision &mdash; upstream calls this one unreliable</span></div>
+      <div class="kf"><label>k_c (exponent)</label><input type="number" id="cpsK" value="0.2784421686721826" step="any" min="0"></div>
     </div>
   </div>
 
@@ -245,8 +248,18 @@
       <p>Each enabled modifier multiplies an input's effective window before the probability is taken: <b>Nerve</b>
       <code>e^(&minus;k&middot;t&#8341;)</code>, <b>Fatigue</b> <code>e^(&minus;k&middot;i)</code>, <b>CPS</b>
       <code>(4/max(1,2c))^k</code> where <code>c</code> is the local clicks/sec from the gap to the previous input.
-      Fatigue and CPS are marked <span class="badge">BROKEN?</span> and all three are off by default; the constants are
-      tunable placeholders because the NaNDL site does not publish its calibrated values.</p>
+      All three are off by default and use the <b>calibrated constants published by the official NaNDL calculator</b>
+      (<code>k_t = 0.0016520833717346</code>, <code>k_u = 0.0002727763242154</code>, <code>k_c = 0.2784421686721826</code>),
+      and remain editable for experimentation. CPS keeps a <span class="badge wip">WIP</span> tag because the official
+      calculator itself still describes that multiplier as work-in-progress and unreliable.</p>
+
+      <h4>JSON interchange</h4>
+      <p><b>Import JSON</b> / <b>Export JSON</b> exchange runs with the official calculator. A document carries the
+      frame-window rows plus <code>gameFps</code>, <code>windowFps</code>, <code>respawnTime</code> and
+      <code>useFrames</code>. Time positions given as frame numbers (<code>useFrames: true</code>) are converted to
+      seconds using <code>gameFps</code>, and rows with an ignored window (<code>"-"</code>) are skipped and reported.
+      Key spellings are matched loosely, so <code>gameFps</code>, <code>game_fps</code> and <code>"Game FPS"</code> all
+      read the same.</p>
     </div>
   </details>
 

@@ -13,8 +13,8 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 - ✅ **Refactored into files** — `index.html` + `css/styles.css` + `js/calc.js` (pure
   math) + `js/app.js` (UI). This is the live app.
 - ✅ **Regression tests** — `tests/calc.test.js`, Node's built-in runner (`npm test`,
-  zero deps). **9/9 pass**: the spec §6 values plus the new `perInputStats`/`sliceRun`
-  helpers.
+  zero deps). **20/20 pass**: the spec §6 values, the helper functions, JSON round-trips,
+  and a parity check against the official calculator's published equations.
 - ✅ **Feature set complete** — URL-shareable state, per-input breakdown, fps presets +
   validation, `.txt` export, run/segment scoring, and offline support (see below).
 - ✅ **Verified in a real browser** — headless Chromium confirms the module loads over
@@ -37,10 +37,12 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 | Feature | Where | Notes |
 |---|---|---|
 | **Refactor** (Step 1) | `index.html`, `css/`, `js/calc.js`, `js/app.js` | Behavior-preserving split; math is an importable ES module. |
-| **Regression tests** (Step 2) | `tests/calc.test.js` | `npm test` → 9/9. |
+| **Regression tests** (Step 2) | `tests/calc.test.js` | `npm test` → 20/20, incl. an independent reimplementation of the official equations for parity. |
 | **URL-shareable state** (Step 4) | `js/app.js` | Whole UI encoded in the `#s=` hash (base64 JSON); **Copy shareable link** button. No browser storage — state lives in the link. |
 | **Per-input breakdown** (Step 5) | `perInputStats()` + breakdown table | Each input's `p`/`reach` at L\*, time in **both seconds and %**, weakest inputs flagged & color-coded. |
 | **fps presets + validation** (Step 6) | Setup panel | 120 / 240 / 480 quick-select; blocks fps ≤ 0, warns on non-integer fps. |
+| **JSON interchange** | `parseCalculatorJson()` / `buildCalculatorJson()` | Import/Export JSON compatible with the official NaNDL calculator: frame-window rows plus `gameFps`, `windowFps`, `respawnTime`, `useFrames`. Frame-number positions convert via `gameFps`; ignored (`"-"`) windows are skipped and reported; key spellings matched loosely. |
+| **Official constants** | `NANDL_CONSTANTS` | `k_t=0.0016520833717346`, `k_u=0.0002727763242154`, `k_c=0.2784421686721826` — the calibrated values from nandl.pages.dev, replacing the placeholders. Verified our `evaluate()` matches the official published equations to 1e-9. Fatigue's BROKEN? tag removed; CPS now tagged **WIP** (upstream still calls it unreliable). |
 | **`.txt` import / export** | `parseInputsText()` + Import/Export | Import accepts each line as `time`/`window` separated by a **dash, a tab, or spaces** (so spreadsheet-pasted `0.55⇥3` works alongside `1.5 - 3`), and an optional **unit label** on either number is ignored (`35.29 - 5f`, `35.29 - 5 frames`); export mirrors the `time - window` form and round-trips. |
 | **Run / segment** | `sliceRun()` + Run panel | A range like `23.2 - 81.8` scores only that slice as its own level (inputs re-based to start at 0, length = to − from). Range respects the Seconds/% switch; the hint and breakdown show **both units**. |
 | **Clear all + confirm** | manual tools + confirm modal | "Clear all" empties the manual list behind a confirm popup ("This can't be undone", input count shown); Esc/Cancel/backdrop dismiss. |
@@ -64,7 +66,8 @@ bump `CACHE` in `sw.js` (cache-first otherwise keeps the cached copy).
 ├── js/
 │   ├── calc.js              # PURE math ES module: erf, passProb, buildSequence,
 │   │                        #   histInputs, localCps, evaluate, solveLstar,
-│   │                        #   perInputStats, sliceRun, difficultyProfile, MAXW
+│   │                        #   perInputStats, sliceRun, difficultyProfile,
+│   │                        #   parseInputsText, parseCalculatorJson, NANDL_CONSTANTS
 │   └── app.js               # UI: input modes, run/segment, breakdown, difficulty
 │                            #   chart, clear/confirm, fps presets, import/export,
 │                            #   URL state, service-worker registration
@@ -97,5 +100,5 @@ offline (DevTools → Network → Offline), and the share link round-trips state
 
 - **Larger / dynamic histogram windows (>20f)** — deferred; marginal effect on L\*, adds
   UI complexity.
-- **Real modifier calibration (`k_t / k_u / k_c`)** — blocked upstream; NaNDL doesn't
-  publish the constants (that's why Fatigue/CPS keep the **BROKEN?** tags). Left editable.
+- ~~**Real modifier calibration**~~ — **done**: the official calculator published its
+  calibrated `k_t / k_u / k_c`, now adopted (see the Official constants row above).

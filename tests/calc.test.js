@@ -3,7 +3,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { erf, passProb, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile, parseInputsText } from "../js/calc.js";
+import { erf, passProb, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile,
+         parseInputsText, NANDL_CONSTANTS, parseCalculatorJson, buildCalculatorJson } from "../js/calc.js";
 
 // Shared setup from spec §6: f=240, T=60s, target=24h, modifiers off unless noted.
 const F = 240;
@@ -183,4 +184,128 @@ test("parseInputsText: ignores unit labels like a frames suffix", () => {
     [[35.29, 5], [0.55, 3], [2.4, 19]]);                                   // f suffix, all separators
   assert.deepEqual(parseInputsText("35.29 - 5 frames"), [[35.29, 5]]);    // word unit
   assert.deepEqual(parseInputsText("35.29s - 5f"), [[35.29, 5]]);         // unit on the time too
+});
+
+/* ===================== parity with the official calculator =====================
+ * The official NaNDL calculator (nandl.pages.dev) publishes these equations:
+ *   w_i = N_i/f            s_i = ½·w_i·L        s_i(Λ) = s_i·∏λ
+ *   λ_t,i = e^(−k_t·t_i)   λ_u,i = e^(−k_u·i)
+ *   c_i = (i−i')/(t_i−t_i')          λ_c,i = (4/max(1,2c_i))^k_c
+ *   p_i = P(|X|≤s_i)  q_i = 1−p_i    r_i = ∏_{j<i} p_j     P(C) = ∏ p_i
+ *   E[T_A] = t_n·P(C) + Σ t_i·r_i·q_i     E[T_C] = E[T_A]/P(C)
+ *   L* = { L : E[T_C(L)] = 24h }
+ * The reference below is written straight from those equations, independently of
+ * js/calc.js, and must agree with evaluate() for consecutively-numbered inputs.
+ * ========================================================================== */
+
+// Independent reference implementation of the official model.
+function officialETC(L, inputs, f, mods) {
+  const n = inputs.length;
+  const p = [];
+  for (let idx = 0; idx < n; idx++) {
+    const i = idx + 1;                       // official inputs are 1-based
+    const w = inputs[idx].k / f;
+    let s = 0.5 * w * L;
+    if (mods.kt != null) s *= Math.exp(-mods.kt * inputs[idx].t);
+    if (mods.ku != null) s *= Math.exp(-mods.ku * i);
+    if (mods.kc != null) {
+      // c_i = (i − i')/(t_i − t_i'); consecutive inputs => i − i' = 1
+      const prev = idx === 0 ? 1 : idx;      // first input: fall back to next gap
+      const dt = idx === 0 ? (inputs[1].t - inputs[0].t) : (inputs[idx].t - inputs[idx - 1].t);
+      const c = (idx === 0 ? 1 : (i - prev)) / dt;
+      s *= Math.pow(4 / Math.max(1, 2 * c), mods.kc);
+    }
+    p.push(erf(s / Math.SQRT2));
+  }
+  const PC = p.reduce((a, v) => a * v, 1);
+  let r = 1, sum = 0;
+  for (let idx = 0; idx < n; idx++) { sum += inputs[idx].t * r * (1 - p[idx]); r *= p[idx]; }
+  const tn = inputs[n - 1].t;
+  return (tn * PC + sum) / PC;
+}
+
+test("official constants are the published values", () => {
+  assert.equal(NANDL_CONSTANTS.nerve,   0.0016520833717346);
+  assert.equal(NANDL_CONSTANTS.fatigue, 0.0002727763242154);
+  assert.equal(NANDL_CONSTANTS.cps,     0.2784421686721826);
+});
+
+test("parity: our evaluate() matches the official equations", () => {
+  const inputs = [ { t: 1.9, k: 2 }, { t: 2.3, k: 6 }, { t: 2.4, k: 19 }, { t: 5.0, k: 4 } ];
+  const T = inputs[inputs.length - 1].t;   // official t_n = last input time
+  const K = NANDL_CONSTANTS;
+
+  const scenarios = [
+    ["no modifiers", {}, { nerve:{on:false,k:K.nerve}, fatigue:{on:false,k:K.fatigue}, cps:{on:false,k:K.cps} }],
+    ["nerve",   { kt:K.nerve },   { nerve:{on:true,k:K.nerve},  fatigue:{on:false,k:K.fatigue}, cps:{on:false,k:K.cps} }],
+    ["fatigue", { ku:K.fatigue }, { nerve:{on:false,k:K.nerve}, fatigue:{on:true,k:K.fatigue},  cps:{on:false,k:K.cps} }],
+    ["cps",     { kc:K.cps },     { nerve:{on:false,k:K.nerve}, fatigue:{on:false,k:K.fatigue}, cps:{on:true,k:K.cps} }],
+    ["all", { kt:K.nerve, ku:K.fatigue, kc:K.cps },
+            { nerve:{on:true,k:K.nerve}, fatigue:{on:true,k:K.fatigue}, cps:{on:true,k:K.cps} }],
+  ];
+
+  for (const [label, refMods, ourMods] of scenarios) {
+    for (const L of [5, 50, 200]) {
+      const ours = evaluate(L, { inputs, f: 240, T, mods: ourMods }).ETC;
+      const ref  = officialETC(L, inputs, 240, refMods);
+      approxRel(ours, ref, 1e-9, `E[T_C] (${label}, L=${L})`);
+    }
+    // and the solved precision agrees too
+    const ourL = solveLstar({ inputs, f: 240, T, mods: ourMods }, 24 * 3600);
+    approxRel(officialETC(ourL, inputs, 240, refMods) / 3600, 24, 1e-6, `L* solves to 24h (${label})`);
+  }
+});
+
+test("parseCalculatorJson: reads the official field set", () => {
+  const doc = {
+    gameFps: 240, windowFps: 240, respawnTime: 0.5, useFrames: false,
+    inputs: [
+      { inputNumber: 1, timePosition: 1.9, frameWindow: 2 },
+      { inputNumber: 2, timePosition: 2.3, frameWindow: 6 },
+    ],
+  };
+  const r = parseCalculatorJson(JSON.stringify(doc));
+  assert.equal(r.ok, true);
+  assert.equal(r.windowFps, 240);
+  assert.equal(r.respawnTime, 0.5);
+  assert.deepEqual(r.inputs, [{ t: 1.9, k: 2 }, { t: 2.3, k: 6 }]);
+});
+
+test("parseCalculatorJson: frame-number positions convert via Game FPS", () => {
+  const doc = { gameFps: 100, windowFps: 240, useFrames: true,
+    inputs: [{ timePosition: 250, frameWindow: 5 }] };
+  const r = parseCalculatorJson(JSON.stringify(doc));
+  assert.equal(r.ok, true);
+  approxRel(r.inputs[0].t, 2.5, 1e-12, "250 frames @100fps = 2.5s");
+});
+
+test("parseCalculatorJson: tolerates key spellings, bare pairs, and ignored windows", () => {
+  // snake_case + alternate row key + '-' ignored window
+  const snake = { game_fps: 240, window_fps: 240, use_frames: false,
+    rows: [ { time: 1, window: 3 }, { time: 2, window: "-" }, { time: 3, window: 4 } ] };
+  const a = parseCalculatorJson(JSON.stringify(snake));
+  assert.equal(a.ok, true);
+  assert.equal(a.ignored, 1, "one ignored row");
+  assert.deepEqual(a.inputs, [{ t: 1, k: 3 }, { t: 3, k: 4 }]);
+
+  // bare array of [time, window] pairs
+  const b = parseCalculatorJson(JSON.stringify([[1.5, 3], [2.1, 5]]));
+  assert.equal(b.ok, true);
+  assert.deepEqual(b.inputs, [{ t: 1.5, k: 3 }, { t: 2.1, k: 5 }]);
+
+  // failures are reported, not thrown
+  assert.equal(parseCalculatorJson("not json").ok, false);
+  assert.equal(parseCalculatorJson(JSON.stringify({ inputs: [] })).ok, false);
+});
+
+test("buildCalculatorJson round-trips through parseCalculatorJson", () => {
+  const inputs = [{ t: 1.9, k: 2 }, { t: 2.3, k: 6 }, { t: 2.4, k: 19 }];
+  const doc = buildCalculatorJson({ inputs, fps: 240 });
+  assert.equal(doc.useFrames, false);
+  assert.equal(doc.windowFps, 240);
+  assert.deepEqual(doc.inputs[0], { inputNumber: 1, timePosition: 1.9, frameWindow: 2 });
+
+  const back = parseCalculatorJson(JSON.stringify(doc));
+  assert.equal(back.ok, true);
+  assert.deepEqual(back.inputs, inputs);
 });

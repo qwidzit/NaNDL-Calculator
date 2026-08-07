@@ -5,7 +5,8 @@
 // offline service worker. No browser storage — sharable state lives in the URL.
 // ============================================================================
 
-import { MAXW, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile, parseInputsText } from "./calc.js";
+import { MAXW, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile,
+         parseInputsText, parseCalculatorJson, buildCalculatorJson } from "./calc.js";
 
 let mode="hist";
 let unit="sec";
@@ -126,13 +127,66 @@ $('exportBtn').addEventListener('click',()=>{
   });
   const status=$('imStatus');
   if(lines.length===1){ status.style.color='var(--warn)'; status.textContent='Nothing to export — add some inputs first.'; return; }
-  const blob=new Blob([lines.join('\n')+'\n'],{type:'text/plain'});
-  const url=URL.createObjectURL(blob);
+  download(lines.join('\n')+'\n','text/plain','nandl-inputs.txt');
+  status.style.color='var(--good)'; status.textContent=`Exported ${lines.length-1} input${lines.length-1>1?'s':''}.`;
+});
+function download(text,type,name){
+  const url=URL.createObjectURL(new Blob([text],{type}));
   const a=document.createElement('a');
-  a.href=url; a.download='nandl-inputs.txt';
+  a.href=url; a.download=name;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
-  status.style.color='var(--good)'; status.textContent=`Exported ${lines.length-1} input${lines.length-1>1?'s':''}.`;
+}
+
+// ---- JSON interchange with the official NaNDL calculator -------------------
+const jsonInput=$('jsonInput');
+$('importJsonBtn').addEventListener('click',()=>jsonInput.click());
+jsonInput.addEventListener('change',e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>importJson(String(ev.target.result));
+  reader.readAsText(file);
+  jsonInput.value='';
+});
+function importJson(text){
+  const status=$('imStatus');
+  const res=parseCalculatorJson(text);
+  if(!res.ok){
+    status.style.color='var(--warn)';
+    status.textContent=`JSON import failed — ${res.error}`;
+    return;
+  }
+  // window FPS is the timing-window rate = our fps
+  if(res.windowFps>0) $('fps').value=res.windowFps;
+  // the official model's t_n is the last input time; match it as our level length
+  const last=res.inputs[res.inputs.length-1].t;
+  if(last>0) $('tlen').value=+last.toFixed(6);
+  // rows are written in seconds; switch the unit control to match
+  applyUnitUI('sec');
+  manualBody.innerHTML='';
+  res.inputs.forEach(inp=>addRow(+inp.t.toFixed(6), inp.k));
+  applyModeUI('manual');
+
+  const notes=[];
+  if(res.ignored>0) notes.push(`${res.ignored} ignored-window row${res.ignored>1?'s':''} skipped`);
+  if(res.respawnTime>0) notes.push(`respawn time ${res.respawnTime}s not modelled`);
+  if(res.useFrames) notes.push(`frame positions converted at ${res.gameFps} fps`);
+  status.style.color='var(--good)';
+  status.textContent=`Imported ${res.inputs.length} input${res.inputs.length>1?'s':''} from JSON`+
+    (notes.length?` (${notes.join('; ')}).`:'.');
+  recompute();
+}
+$('exportJsonBtn').addEventListener('click',()=>{
+  const status=$('imStatus');
+  const inputs=readManual(num('tlen'));
+  if(inputs.length===0){
+    status.style.color='var(--warn)'; status.textContent='Nothing to export — add some inputs first.';
+    return;
+  }
+  const doc=buildCalculatorJson({inputs, fps:num('fps')||240});
+  download(JSON.stringify(doc,null,2),'application/json','nandl-run.json');
+  status.style.color='var(--good)';
+  status.textContent=`Exported ${inputs.length} input${inputs.length>1?'s':''} as JSON.`;
 });
 
 // ---- format guide modal ----------------------------------------------------

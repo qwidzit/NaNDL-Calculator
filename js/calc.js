@@ -11,6 +11,15 @@
 // Largest frame-window size the histogram grid supports (1f … 20f).
 export const MAXW = 20;
 
+// Calibrated modifier constants, taken from the official NaNDL calculator
+// (nandl.pages.dev) — these replace the earlier placeholder guesses.
+// Note: upstream still labels the CPS multiplier "WIP, unreliable".
+export const NANDL_CONSTANTS = Object.freeze({
+  nerve:   0.0016520833717346,   // k_t
+  fatigue: 0.0002727763242154,   // k_u
+  cps:     0.2784421686721826,   // k_c
+});
+
 // Error function approximation (Numerical Recipes erfcc, |error| < 1.2e-7).
 // JS has no Math.erf, so this is implemented directly. Anchor: erf(1) ≈ 0.8427.
 export function erf(x){
@@ -192,4 +201,111 @@ export function parseInputsText(text){
     if(m){ const t=parseFloat(m[1]), w=parseFloat(m[2]); if(!isNaN(t)&&!isNaN(w)) out.push([t,w]); }
   });
   return out;
+}
+
+/* ============================ JSON interchange ============================
+ * The official NaNDL calculator exchanges runs as JSON containing the
+ * frame-window rows, Game FPS, Window FPS, respawn time, and whether time
+ * positions are seconds or frame numbers. Key spellings are matched
+ * case/format-insensitively (gameFps == game_fps == "Game FPS") so an export
+ * from either tool imports here.
+ * ======================================================================== */
+
+// Normalize a key for lookup: lowercase, strip anything non-alphanumeric.
+const normKey = k => String(k).toLowerCase().replace(/[^a-z0-9]/g,'');
+
+// Find the first present key from `names` in a plain object (format-insensitive).
+function pick(obj, names){
+  if(!obj || typeof obj!=='object') return undefined;
+  const map = new Map(Object.keys(obj).map(k=>[normKey(k), obj[k]]));
+  for(const n of names){ const v=map.get(normKey(n)); if(v!==undefined && v!==null) return v; }
+  return undefined;
+}
+function pickNum(obj, names){
+  const v = pick(obj, names);
+  if(v===undefined) return undefined;
+  const n = typeof v==='number' ? v : parseFloat(String(v));
+  return isNaN(n) ? undefined : n;
+}
+function pickBool(obj, names){
+  const v = pick(obj, names);
+  if(v===undefined) return undefined;
+  if(typeof v==='boolean') return v;
+  const s = String(v).trim().toLowerCase();
+  if(['true','1','yes','frames','frame'].includes(s)) return true;
+  if(['false','0','no','seconds','second','sec'].includes(s)) return false;
+  return undefined;
+}
+
+const ROW_KEYS    = ['inputs','rows','inputRows','frameWindows','windows','data','entries','list'];
+const TIME_KEYS   = ['timePosition','time','t','position','frameNumber','framePosition','frame','seconds'];
+const WINDOW_KEYS = ['frameWindow','window','frames','windowFrames','w','n'];
+const NUM_KEYS    = ['inputNumber','number','index','i','id'];
+
+// Parse a calculator JSON document into a normalized shape:
+//   { ok:true, gameFps, windowFps, respawnTime, useFrames,
+//     inputs:[{t,k}] (t in SECONDS), ignored, rowCount }
+// `inputs` excludes rows with an ignored/default window ("-"), counted in `ignored`.
+// Returns { ok:false, error } when the document has no usable rows.
+export function parseCalculatorJson(text){
+  let doc;
+  try{ doc = typeof text==='string' ? JSON.parse(text) : text; }
+  catch(e){ return {ok:false, error:'Not valid JSON.'}; }
+  if(!doc || typeof doc!=='object') return {ok:false, error:'JSON root must be an object or array.'};
+
+  // rows may be the root array, a known key, or the first array-of-objects present
+  let rows = Array.isArray(doc) ? doc : pick(doc, ROW_KEYS);
+  if(!Array.isArray(rows)){
+    const arr = Object.values(doc).find(v=>Array.isArray(v) && v.length && typeof v[0]==='object');
+    if(Array.isArray(arr)) rows = arr;
+  }
+  if(!Array.isArray(rows)) return {ok:false, error:'No input rows found in the JSON.'};
+
+  const root = Array.isArray(doc) ? {} : doc;
+  const gameFps    = pickNum(root, ['gameFps','gameFramerate','gameFrameRate','fpsGame']) ?? 240;
+  const windowFps  = pickNum(root, ['windowFps','windowFramerate','fps','frameRate','framerate']) ?? 240;
+  const respawn    = pickNum(root, ['respawnTime','respawn','respawnSeconds']) ?? 0;
+  const useFrames  = pickBool(root, ['useFrames','useFrameNumbers','framePositions','framesAsTime']) ?? false;
+
+  const inputs=[]; let ignored=0;
+  for(const row of rows){
+    // rows may be objects, or bare [time, window] pairs
+    let tRaw, kRaw;
+    if(Array.isArray(row)){ tRaw=row[0]; kRaw=row[1]; }
+    else if(row && typeof row==='object'){ tRaw=pick(row,TIME_KEYS); kRaw=pick(row,WINDOW_KEYS); }
+    else continue;
+
+    const t = typeof tRaw==='number' ? tRaw : parseFloat(String(tRaw));
+    if(!isFinite(t)) continue;
+
+    // "-" / "" / null mark an ignored (default) frame window upstream
+    const kStr = kRaw===undefined || kRaw===null ? '' : String(kRaw).trim();
+    const k = kStr==='' || kStr==='-' ? NaN : parseFloat(kStr);
+    if(!isFinite(k) || k<=0){ ignored++; continue; }
+
+    // frame-number positions convert to seconds via Game FPS
+    const tSec = useFrames && gameFps>0 ? t/gameFps : t;
+    if(tSec<0) continue;
+    inputs.push({t:tSec, k});
+  }
+  if(inputs.length===0) return {ok:false, error:'No usable inputs (rows had no valid time/window pair).'};
+  inputs.sort((a,b)=>a.t-b.t);
+  return {ok:true, gameFps, windowFps, respawnTime:respawn, useFrames, inputs, ignored, rowCount:rows.length};
+}
+
+// Build a calculator JSON document from our state. Times are written in
+// seconds (useFrames:false), which the official format supports directly.
+export function buildCalculatorJson({inputs, fps, respawnTime=0}={}){
+  const list = Array.isArray(inputs)?inputs:[];
+  return {
+    gameFps: fps,
+    windowFps: fps,
+    respawnTime,
+    useFrames: false,
+    inputs: list.map((inp,i)=>({
+      inputNumber: i+1,
+      timePosition: inp.t,
+      frameWindow: inp.k,
+    })),
+  };
 }

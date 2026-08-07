@@ -17,11 +17,13 @@ no accounts. Shareable state lives in the URL; the only persistence is an offlin
   level (inputs re-based to start at 0). Works in both seconds and %.
 - **Per-input breakdown** — each input's pass probability `p` and reach probability at `L*`,
   with times shown in both seconds and %, and the weakest inputs flagged.
-- **Modifiers** — optional Nerve / Fatigue / CPS multipliers (off by default; the constants
-  are editable placeholders — Fatigue and CPS are tagged `BROKEN?` because NaNDL doesn't
-  publish calibrated values).
+- **Modifiers** — optional Nerve / Fatigue / CPS multipliers (off by default), using the
+  **calibrated constants published by the official NaNDL calculator** and still editable.
+  CPS keeps a `WIP` tag because upstream itself calls that multiplier unreliable.
 - **fps presets** 120 / 240 / 480 + validation.
-- **`.txt` import / export** of the manual list.
+- **`.txt` import / export** of the manual list, plus **JSON import / export** compatible with
+  the official NaNDL calculator (frame-window rows, `gameFps`, `windowFps`, `respawnTime`,
+  `useFrames`).
 - **Shareable links** — the whole UI state is encoded in the URL hash (no storage).
 - **Offline** — a service worker caches all assets, so it runs with no network after first load.
 

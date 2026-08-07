@@ -81,15 +81,18 @@ Each enabled modifier multiplies an input's sigma value before the probability i
 
 | Modifier | Formula | Depends on | Default constant | UI note |
 |---|---|---|---|---|
-| Nerve   | `λ = e^(−k_t · tᵢ)` | time position `tᵢ` (s) | `k_t = 0.0015` | — |
-| Fatigue | `λ = e^(−k_u · i)`  | input index `i` (1-based) | `k_u = 0.00075` | tagged **BROKEN?** |
-| CPS     | `λ = (4 / max(1, 2c))^{k_c}` | local clicks/sec `c` | `k_c = 2` | tagged **BROKEN?** |
+| Nerve   | `λ = e^(−k_t · tᵢ)` | time position `tᵢ` (s) | `k_t = 0.0016520833717346` | — |
+| Fatigue | `λ = e^(−k_u · i)`  | input index `i` (1-based) | `k_u = 0.0002727763242154` | — |
+| CPS     | `λ = (4 / max(1, 2c))^{k_c}` | local clicks/sec `c` | `k_c = 0.2784421686721826` | tagged **WIP** |
 
 `c` (local CPS) is `1 / gap`, where `gap` is the time to the previous input (for the first
-input, to the next; for a single input, `1/levelLength`). These constants are **placeholders**
-— the real NaNDL site does not publish its calibrated values, so they are exposed as editable
-fields. The "BROKEN?" tags on Fatigue and CPS were requested by the product owner to flag them
-as not-yet-trusted.
+input, to the next; for a single input, `1/levelLength`).
+
+> **Updated:** these are now the **calibrated constants published by the official NaNDL
+> calculator** (nandl.pages.dev), which replaced the earlier placeholder guesses
+> (`0.0015 / 0.00075 / 2`). They remain editable. The BROKEN? tags were dropped; CPS keeps a
+> **WIP** tag because the official calculator itself still labels that multiplier
+> "WIP, unreliable".
 
 Note: because Nerve/Fatigue/CPS depend on ordering and timing, they only affect the result
 in ways that depend on input order. With all modifiers off, order is irrelevant to `P(C)`.
@@ -181,8 +184,8 @@ no inputs, or target ≤ 0.
 - **Histogram ordering is synthetic.** Even spacing + even interleave is a neutral guess;
   it only matters once a modifier is enabled. A real level's clustering of hard inputs is
   not captured in histogram mode — manual mode is the accurate path.
-- **Modifier constants are unverified.** Defaults are placeholders; Fatigue and CPS are
-  flagged BROKEN?. Do not present them as authoritative.
+- **Modifier constants** are the official calibrated values (see §2.4). CPS is still flagged
+  **WIP** upstream, so don't present its output as authoritative.
 - **`σ` is a timing standard deviation in seconds**, and `L = 1/σ`. The "precision" number
   is unitless-ish (1/s); the ms readout is the more intuitive form.
 - **Target time** is user-editable (default 24 h) even though the NaNDL definition fixes it
