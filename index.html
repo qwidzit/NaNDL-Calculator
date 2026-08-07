@@ -103,6 +103,11 @@
         <input type="number" id="skill" value="100" min="0.0001" step="any">
         <div class="hint">stats are computed at this fixed precision</div>
       </div>
+      <div class="field">
+        <label>Reference precision (for G)</label>
+        <input type="number" id="refL" value="100" min="0.0001" step="any">
+        <div class="hint">grind entropy is measured at this precision</div>
+      </div>
     </div>
   </div>
 
@@ -209,6 +214,19 @@
     </div>
   </div>
 
+  <div class="panel" id="gPanel">
+    <h2>Grind entropy &nbsp;G <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— an additive difficulty scale</span></h2>
+    <div class="grow">
+      <div class="gbig"><span id="gbits">—</span> <span class="gunit">bits</span></div>
+      <div class="gside">
+        <div class="gstat"><b id="gattempts">—</b><span>expected attempts &asymp; 2<sup>G</sup></span></div>
+        <div class="gstat"><b id="gref">—</b><span>at reference precision</span></div>
+        <div class="gstat"><b id="gper">—</b><span>bits per input (avg)</span></div>
+      </div>
+    </div>
+    <div class="totline" id="gnote"></div>
+  </div>
+
   <div class="panel hidden" id="diffPanel">
     <h2>Difficulty profile <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— estimated difficulty across the level (manual mode)</span></h2>
     <div class="diffhead">
@@ -235,7 +253,7 @@
         <table class="breakdown" id="bdTable">
           <thead><tr>
             <th>#</th><th>Time (s)</th><th>Time (%)</th><th>Window</th><th>ms</th>
-            <th>p (pass)</th><th>reach</th>
+            <th>p (pass)</th><th>reach</th><th>bits</th>
           </tr></thead>
           <tbody id="bdBody"></tbody>
         </table>
@@ -293,6 +311,20 @@
       (<code>k_t = 0.0016520833717346</code>, <code>k_u = 0.0002727763242154</code>, <code>k_c = 0.2784421686721826</code>),
       and remain editable for experimentation. CPS keeps a <span class="badge wip">WIP</span> tag because the official
       calculator itself still describes that multiplier as work-in-progress and unreliable.</p>
+
+      <h4>Grind entropy (G)</h4>
+      <p><b>L*</b> answers &ldquo;how sharp must you be?&rdquo; but it compresses an enormous range into a small
+      number and cannot be added: two levels played back to back do <i>not</i> have
+      <code>L*&#8321; + L*&#8322;</code>. <b>G</b> fixes both by measuring difficulty in log space:</p>
+      <p><code>G = &minus;log&#8322; P(C) = &sum; &minus;log&#8322; p&#8341;</code> &nbsp;(bits)</p>
+      <p>Physically it is the <b>information content of one clean run</b> &mdash; how many bits of luck a completion
+      costs. Expected attempts &asymp; <code>2&#7501;</code>, so <b>one extra bit means twice the grind</b>, everywhere
+      on the scale. Because logs add, <code>G(A then B) = G(A) + G(B)</code> <b>exactly</b>, and each input carries its
+      own <code>g&#8341;</code> (shown in the per-input breakdown), so any segment's difficulty is just the sum of its
+      inputs' bits.</p>
+      <p>G is measured at a <b>reference precision</b> you set &mdash; that is what buys the additivity, since a level's
+      improbability depends on who is playing it. Respawn time does not affect G: it changes how long an attempt costs,
+      not how improbable one is.</p>
 
       <h4>JSON interchange</h4>
       <p><b>Import JSON</b> / <b>Export JSON</b> exchange runs with the official calculator. A document carries the

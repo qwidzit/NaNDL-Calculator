@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { erf, passProb, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile,
          parseInputsText, NANDL_CONSTANTS, parseCalculatorJson, buildCalculatorJson,
-         localCps } from "../js/calc.js";
+         localCps, grindEntropy } from "../js/calc.js";
 
 // Shared setup from spec §6: f=240, T=60s, target=24h, modifiers off unless noted.
 const F = 240;
@@ -372,4 +372,56 @@ test("evaluate exposes attempt stats for fixed-precision mode", () => {
   const r = evaluate(10, { inputs, f: F, T, mods: modsOff });
   approxRel(r.attempts, 1 / r.PC, 1e-12, "attempts = 1/P(C)");
   approxRel(r.ETC, r.ETA / r.PC, 1e-12, "E[T_C] = E[T_A]/P(C)");
+});
+
+/* ===================== grind entropy (G) =================================== */
+
+test("grindEntropy: G = -log2 P(C) and attempts = 2^G", () => {
+  const inputs = [ { t: 1.9, k: 2 }, { t: 2.3, k: 6 }, { t: 2.4, k: 19 } ];
+  const cfg = { inputs, f: F, T, mods: modsOff };
+  const L = 40;
+  const g = grindEntropy(L, cfg);
+  const PC = evaluate(L, cfg).PC;
+  approxRel(g.bits, -Math.log2(PC), 1e-9, "G = -log2 P(C)");
+  approxRel(g.attempts, 1 / PC, 1e-6, "2^G = 1/P(C) = expected attempts");
+  approxRel(g.per.reduce((a, b) => a + b, 0), g.bits, 1e-9, "per-input bits sum to G");
+});
+
+test("grindEntropy is exactly additive across concatenated segments", () => {
+  // The property L* lacks: two levels played back to back simply add.
+  const a = [ { t: 1.0, k: 3 }, { t: 2.0, k: 5 } ];
+  const b = [ { t: 1.0, k: 2 }, { t: 3.0, k: 8 } ];
+  const L = 60;
+  const mk = inputs => ({ inputs, f: F, T: inputs[inputs.length - 1].t, mods: modsOff });
+  // concatenate: shift b after a (modifiers off => positions don't affect p)
+  const joined = [...a, ...b.map(i => ({ t: i.t + 10, k: i.k }))];
+
+  const gA = grindEntropy(L, mk(a)).bits;
+  const gB = grindEntropy(L, mk(b)).bits;
+  const gJ = grindEntropy(L, mk(joined)).bits;
+  approxRel(gJ, gA + gB, 1e-9, "G(A+B) = G(A) + G(B)");
+
+  // ...and L* is demonstrably NOT additive, which is the whole reason G exists.
+  // (The error has no fixed direction — it depends on where each level sits on
+  // the erf tail — so we assert only that adding L* is wrong.)
+  const lA = solveLstar(mk(a), TARGET_SEC);
+  const lB = solveLstar(mk(b), TARGET_SEC);
+  const lJ = solveLstar(mk(joined), TARGET_SEC);
+  const relErr = Math.abs(lJ - (lA + lB)) / lJ;
+  assert.ok(relErr > 0.05,
+    `L* must not be additive: L*(A+B)=${lJ} vs L*(A)+L*(B)=${lA + lB}`);
+});
+
+test("grindEntropy: independent of respawn, monotonically falls as precision rises", () => {
+  const inputs = [ { t: 1.9, k: 2 }, { t: 2.3, k: 6 } ];
+  const base = { inputs, f: F, T, mods: modsOff };
+  // respawn changes attempt cost, not attempt improbability
+  approxRel(grindEntropy(50, { ...base, respawn: 9 }).bits,
+            grindEntropy(50, base).bits, 1e-12, "respawn does not move G");
+  // sharper player => fewer bits of luck required
+  assert.ok(grindEntropy(200, base).bits < grindEntropy(50, base).bits, "G falls with precision");
+  // ignored windows are free (p = 1 => 0 bits)
+  const withIgnored = { ...base, inputs: [...inputs, { t: 3, k: null }] };
+  approxRel(grindEntropy(50, withIgnored).bits, grindEntropy(50, base).bits, 1e-12,
+            "ignored input costs 0 bits");
 });

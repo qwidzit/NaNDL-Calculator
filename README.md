@@ -25,6 +25,9 @@ no accounts. Shareable state lives in the URL; the only persistence is an offlin
   **input numbers** that drive Fatigue and local CPS — matching the official calculator.
 - **Fixed-precision mode** — instead of solving for `L*`, report P(C), expected attempts and
   completion time at a precision you supply.
+- **Grind entropy `G`** — an additive difficulty scale: `G = −log₂ P(C)` in bits, measured at a
+  reference precision you set. Expected attempts ≈ `2^G`, one extra bit = twice the grind, and
+  unlike `L*` it adds exactly across segments (`G(A then B) = G(A) + G(B)`).
 - **`.txt` import / export** of the manual list, plus **JSON import / export** compatible with
   the official NaNDL calculator (frame-window rows, `gameFps`, `windowFps`, `respawnTime`,
   `useFrames`).

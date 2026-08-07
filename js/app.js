@@ -6,7 +6,7 @@
 // ============================================================================
 
 import { MAXW, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile,
-         parseInputsText, parseCalculatorJson, buildCalculatorJson } from "./calc.js";
+         parseInputsText, parseCalculatorJson, buildCalculatorJson, grindEntropy } from "./calc.js";
 
 let mode="hist";
 let unit="sec";
@@ -294,7 +294,30 @@ function fmtCount(v){
   if(!isFinite(v)) return '∞';
   return v>=1e5 ? v.toExponential(2) : Math.round(v).toLocaleString();
 }
-function renderBreakdown(Lstar,cfg,Teff,runActive,rangeLabel){
+function renderG(g,refL,count,runActive,rangeLabel){
+  const note=$('gnote');
+  if(!g || !(refL>0)){
+    $('gbits').textContent='—'; $('gattempts').textContent='—';
+    $('gref').textContent='—'; $('gper').textContent='—';
+    note.innerHTML='<span style="color:var(--warn)">Enter a reference precision greater than 0.</span>';
+    return;
+  }
+  const bits=g.bits;
+  $('gbits').textContent = isFinite(bits)
+    ? (bits>=1000 ? bits.toExponential(3) : bits.toFixed(2))
+    : '∞';
+  $('gattempts').textContent = isFinite(g.attempts)
+    ? (g.attempts>=1e5 ? g.attempts.toExponential(2) : Math.round(g.attempts).toLocaleString())
+    : '∞';
+  $('gref').textContent = refL.toLocaleString(undefined,{maximumFractionDigits:2});
+  $('gper').textContent = (isFinite(bits)&&count>0) ? (bits/count).toFixed(3) : '—';
+  const what = runActive ? `this run (${rangeLabel})` : 'this level';
+  note.innerHTML = `Bits of luck one clean completion of ${what} costs a player at precision `+
+    `<b>${refL.toLocaleString(undefined,{maximumFractionDigits:2})}</b>. `+
+    `One extra bit = twice the grind, and segments <b>add</b>: G(A then B) = G(A) + G(B).`;
+}
+
+function renderBreakdown(Lstar,cfg,Teff,runActive,rangeLabel,g){
   const bd=$('breakdown'), body=$('bdBody');
   const per=perInputStats(Lstar,cfg);
   body.innerHTML='';
@@ -317,7 +340,8 @@ function renderBreakdown(Lstar,cfg,Teff,runActive,rangeLabel){
       <td>${s.ignored?`<span style="color:var(--muted)">${kShown==='—'?'ignored':kShown+'f*'}</span>`:kShown+'f'}</td>
       <td>${ms}</td>
       <td class="pbar ${pClass}">${fmtProb(s.p)}${weak?' <span class="weak-tag">weak</span>':''}</td>
-      <td>${fmtProb(s.r)}</td>`;
+      <td>${fmtProb(s.r)}</td>
+      <td class="bits">${g&&isFinite(g.per[i])?(g.per[i]<0.001?g.per[i].toExponential(1):g.per[i].toFixed(3)):'—'}</td>`;
     body.appendChild(tr);
   });
   $('bdCount').textContent=`— ${per.length} input${per.length>1?'s':''}${runActive?` in run ${rangeLabel}`:''}`;
@@ -474,7 +498,8 @@ function recompute(){
   renderDifficulty(fullInputs, T, {active:runActive, loPct:runLoPct, hiPct:runHiPct});
 
   const stats=$('stats'), big=$('lstar'), rsub=$('rsub');
-  const show=(msg)=>{big.textContent='—'; rsub.className='rsub msg'; rsub.textContent=msg; stats.style.display='none'; $('breakdown').classList.add('hidden');};
+  const show=(msg)=>{big.textContent='—'; rsub.className='rsub msg'; rsub.textContent=msg; stats.style.display='none';
+    $('breakdown').classList.add('hidden'); $('gPanel').classList.add('hidden');};
 
   if(!(T>0)) return show('Enter a level length greater than 0.');
   if(!(f>0)) return show('Enter a frame rate greater than 0.');
@@ -515,7 +540,14 @@ function recompute(){
   $('eta').textContent=chk.ETA.toFixed(2)+' s';
   $('etc').textContent=isFinite(chk.ETC)?fmtHours(chk.ETC/3600):'∞';
 
-  renderBreakdown(L,cfg,Teff,runActive,rangeLabel);
+  // Grind entropy at the user's reference precision — independent of the mode
+  // above, so it stays comparable across levels and adds across segments.
+  $('gPanel').classList.remove('hidden');
+  const refL=num('refL');
+  const g = refL>0 ? grindEntropy(refL,cfg) : null;
+  renderG(g,refL,inputs.length,runActive,rangeLabel);
+
+  renderBreakdown(L,cfg,Teff,runActive,rangeLabel,g);
 }
 
 // ---- URL-shareable state (no browser storage — state lives in the hash) ----
@@ -541,7 +573,7 @@ function serialize(){
     run:[$('runOn').checked?1:0, $('runRange').value],
     sm:$('smooth').value,
     gf:$('gameFps').value, rs:$('respawn').value,
-    cm:calcMode, sk:$('skill').value,
+    cm:calcMode, sk:$('skill').value, rl:$('refL').value,
   };
 }
 function updateHash(){
@@ -571,6 +603,7 @@ function restore(){
     if(st.gf!=null) $('gameFps').value=st.gf;
     if(st.rs!=null) $('respawn').value=st.rs;
     if(st.sk!=null) $('skill').value=st.sk;
+    if(st.rl!=null) $('refL').value=st.rl;
     // run
     if(st.run){ $('runOn').checked=!!st.run[0]; $('runRange').value=st.run[1]??''; }
     if(st.sm!=null) $('smooth').value=st.sm;

@@ -155,6 +155,30 @@ export function perInputStats(L,cfg){
   return out;
 }
 
+// Grind entropy — the information content of one clean run at precision L:
+//
+//     G = −log₂ P(C) = Σᵢ −log₂ pᵢ        (bits)
+//
+// Physically: how many bits of "luck" a completion costs, so expected attempts
+// ≈ 2^G and one extra bit means twice the grind. Unlike L*, G is EXACTLY
+// additive — G(A then B) = G(A) + G(B) — because it lives in log space, which
+// makes segments and back-to-back levels simply add up. Each input carries its
+// own gᵢ, so the total decomposes per input.
+//
+// G is defined at a reference precision L, which must be supplied (that is what
+// buys the additivity). Respawn time does not affect G: it changes how long an
+// attempt costs, not how improbable one is.
+export function grindEntropy(L,cfg){
+  const ps=passProbs(L,cfg);
+  const per=new Array(ps.length);
+  let bits=0;
+  for(let j=0;j<ps.length;j++){
+    const b = ps[j]>0 ? -Math.log2(ps[j]) : Infinity;
+    per[j]=b; bits+=b;
+  }
+  return {bits, per, attempts: Math.pow(2,bits)};
+}
+
 // Bisection for L* where E[T_C] == targetSec. Expands the upper bracket first.
 export function solveLstar(cfg,targetSec){
   if(cfg.inputs.length===0) return null;

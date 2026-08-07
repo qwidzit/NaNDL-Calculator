@@ -169,3 +169,13 @@ svg .peakdot{fill:#fff; stroke:#ff6b6b; stroke-width:2; vector-effect:non-scalin
 .difftip{position:absolute; top:6px; transform:translateX(-50%); background:#0d1017; border:1px solid var(--line);
   color:var(--txt); font-size:11px; padding:3px 7px; border-radius:6px; white-space:nowrap; opacity:0; pointer-events:none;
   font-variant-numeric:tabular-nums; transition:opacity .1s}
+
+/* grind entropy panel */
+.grow{display:flex; align-items:center; gap:28px; flex-wrap:wrap}
+.gbig{font-size:44px; font-weight:700; color:#fff; font-variant-numeric:tabular-nums; line-height:1}
+.gbig .gunit{font-size:16px; font-weight:600; color:var(--accent); letter-spacing:1px}
+.gside{display:flex; gap:26px; flex-wrap:wrap}
+.gstat{min-width:120px}
+.gstat b{display:block; font-size:17px; font-weight:600; color:var(--accent2); font-variant-numeric:tabular-nums}
+.gstat span{font-size:11px; color:var(--muted)}
+table.breakdown .bits{color:var(--accent)}
