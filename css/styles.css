@@ -179,3 +179,14 @@ svg .peakdot{fill:#fff; stroke:#ff6b6b; stroke-width:2; vector-effect:non-scalin
 .gstat b{display:block; font-size:17px; font-weight:600; color:var(--accent2); font-variant-numeric:tabular-nums}
 .gstat span{font-size:11px; color:var(--muted)}
 table.breakdown .bits{color:var(--accent)}
+
+/* back-to-top button */
+.totop{
+  position:fixed; right:20px; bottom:20px; width:42px; height:42px; border-radius:50%;
+  background:var(--panel); border:1px solid var(--line); color:var(--accent);
+  font-size:14px; cursor:pointer; z-index:40; font-family:inherit; line-height:1;
+  box-shadow:0 6px 20px rgba(0,0,0,.4);
+  opacity:0; pointer-events:none; transform:translateY(8px); transition:opacity .2s, transform .2s;
+}
+.totop.show{opacity:1; pointer-events:auto; transform:none}
+.totop:hover{border-color:var(--accent); color:var(--txt)}

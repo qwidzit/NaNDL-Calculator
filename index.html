@@ -143,11 +143,13 @@
         <button class="btn2" id="importJsonBtn">&#8593; Import JSON</button>
         <button class="btn2" id="exportJsonBtn">&#8595; Export JSON</button>
         <button class="btn2 ghost" id="guideBtn">Format guide</button>
+        <button class="btn2 ghost" id="toggleList">&#9650; Hide list</button>
         <button class="btn2 danger" id="clearBtn">Clear all</button>
         <input type="file" id="fileInput" accept=".txt,text/plain" style="display:none">
         <input type="file" id="jsonInput" accept=".json,application/json" style="display:none">
         <span class="imstatus" id="imStatus"></span>
       </div>
+      <div id="listWrap">
       <table class="manual">
         <thead><tr>
           <th style="width:12%">#</th>
@@ -159,7 +161,8 @@
         <tbody id="manualBody"></tbody>
       </table>
       <button class="addbtn" id="addRow">+ Add input</button>
-      <div class="totline">Total inputs: <b id="manTotal">0</b></div>
+      </div>
+      <div class="totline">Total inputs: <b id="manTotal">0</b><span id="listHidden" class="hidden"> &nbsp;·&nbsp; list hidden</span></div>
     </div>
   </div>
 
@@ -231,8 +234,8 @@
     <h2>Difficulty profile <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— estimated difficulty across the level (manual mode)</span></h2>
     <div class="diffhead">
       <label for="smooth">Smoothing</label>
-      <input type="range" id="smooth" min="0.5" max="25" step="0.5" value="4">
-      <span class="imstatus" id="smoothVal">4.0%</span>
+      <input type="range" id="smooth" min="0.5" max="25" step="0.5" value="1.5">
+      <span class="imstatus" id="smoothVal">1.5%</span>
     </div>
     <div class="chartwrap" id="diffChart">
       <div id="diffSvg"></div>
@@ -370,6 +373,8 @@
     &nbsp;·&nbsp; Calculator developed by QwidziT
   </footer>
 </div>
+
+<button id="toTop" class="totop" title="Back to top" aria-label="Back to top">&#9650;</button>
 
 <script type="module" src="js/app.js"></script>
 </body>

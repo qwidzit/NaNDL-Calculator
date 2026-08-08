@@ -225,6 +225,25 @@ $('guideBtn').addEventListener('click',()=>guideModal.classList.add('show'));
 $('guideClose').addEventListener('click',()=>guideModal.classList.remove('show'));
 guideModal.addEventListener('click',e=>{ if(e.target===guideModal) guideModal.classList.remove('show'); });
 
+// ---- collapse the manual list (long lists shouldn't force scrolling) -------
+let listHidden=false;
+function applyListUI(hide){
+  listHidden=!!hide;
+  $('listWrap').classList.toggle('hidden',listHidden);
+  $('listHidden').classList.toggle('hidden',!listHidden);
+  $('toggleList').innerHTML = listHidden ? '&#9660; Show list' : '&#9650; Hide list';
+}
+$('toggleList').addEventListener('click',()=>applyListUI(!listHidden));
+
+// ---- back to top -----------------------------------------------------------
+{
+  const btn=$('toTop');
+  btn.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
+  const sync=()=>btn.classList.toggle('show', window.scrollY>320);
+  window.addEventListener('scroll',sync,{passive:true});
+  sync();
+}
+
 // ---- clear all (with confirm popup) ----------------------------------------
 const confirmModal=$('confirmModal');
 $('clearBtn').addEventListener('click',()=>{
@@ -352,7 +371,7 @@ function renderBreakdown(Lstar,cfg,Teff,runActive,rangeLabel,g){
 function renderDifficulty(inputs,T,run){
   const panel=$('diffPanel');
   if(mode!=='manual' || !(T>0) || inputs.length===0){ panel.classList.add('hidden'); lastProfile=null; return; }
-  const h=parseFloat($('smooth').value)||4;
+  const h=parseFloat($('smooth').value)||1.5;
   $('smoothVal').textContent=h.toFixed(1)+'%';
   const mods=readMods();
   const prof=difficultyProfile(inputs,T,mods,{bandwidthPct:h,samples:240});
@@ -573,7 +592,7 @@ function serialize(){
     run:[$('runOn').checked?1:0, $('runRange').value],
     sm:$('smooth').value,
     gf:$('gameFps').value, rs:$('respawn').value,
-    cm:calcMode, sk:$('skill').value, rl:$('refL').value,
+    cm:calcMode, sk:$('skill').value, rl:$('refL').value, lh:listHidden?1:0,
   };
 }
 function updateHash(){
@@ -604,6 +623,7 @@ function restore(){
     if(st.rs!=null) $('respawn').value=st.rs;
     if(st.sk!=null) $('skill').value=st.sk;
     if(st.rl!=null) $('refL').value=st.rl;
+    applyListUI(!!st.lh);
     // run
     if(st.run){ $('runOn').checked=!!st.run[0]; $('runRange').value=st.run[1]??''; }
     if(st.sm!=null) $('smooth').value=st.sm;

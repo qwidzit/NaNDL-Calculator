@@ -38,7 +38,7 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 |---|---|---|
 | **Refactor** (Step 1) | `index.html`, `css/`, `js/calc.js`, `js/app.js` | Behavior-preserving split; math is an importable ES module. |
 | **Regression tests** (Step 2) | `tests/calc.test.js` | `npm test` → 27/27, incl. an independent reimplementation of the official equations for parity. |
-| **URL-shareable state** (Step 4) | `js/app.js` | Whole UI encoded in the `#s=` hash (base64 JSON); **Copy shareable link** button. No browser storage — state lives in the link. |
+| **URL-shareable state** (Step 4) | `js/app.js` | Whole UI encoded in the `#s=` hash (base64 JSON) — including every **mode** (histogram/manual, solve/fixed precision, seconds/%/frames, list collapsed) so a shared link opens in the right view. **Copy shareable link** button; no browser storage. |
 | **Per-input breakdown** (Step 5) | `perInputStats()` + breakdown table | Each input's `p`/`reach` at L\*, time in **both seconds and %**, weakest inputs flagged & color-coded. |
 | **fps presets + validation** (Step 6) | Setup panel | 120 / 240 / 480 quick-select; blocks fps ≤ 0, warns on non-integer fps. |
 | **JSON interchange** | `parseCalculatorJson()` / `buildCalculatorJson()` | Import/Export JSON compatible with the official NaNDL calculator: frame-window rows plus `gameFps`, `windowFps`, `respawnTime`, `useFrames`. Frame-number positions convert via `gameFps`; ignored (`"-"`) windows are skipped and reported; key spellings matched loosely. |
@@ -53,7 +53,8 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 | **Run / segment** | `sliceRun()` + Run panel | A range like `23.2 - 81.8` scores only that slice as its own level (inputs re-based to start at 0, length = to − from). Range respects the Seconds/% switch; the hint and breakdown show **both units**. |
 | **Clear all + confirm** | manual tools + confirm modal | "Clear all" empties the manual list behind a confirm popup ("This can't be undone", input count shown); Esc/Cancel/backdrop dismiss. |
 | **Difficulty profile** | `difficultyProfile()` + SVG chart | Manual mode only: a smooth difficulty curve across the level (Gaussian-kernel over input positions; difficulty = 1/(window·λ), where λ is the enabled modifiers' multiplier — so **modifiers reshape the curve**). Gradient fill, peak marker, hover readout (`x% · difficulty`), active run region shaded, "Modifiers applied" note when any is on. |
-| **Smoothing slider** | `#smooth` range | Controls the difficulty curve's kernel bandwidth (0.5–25%, default 4%); persisted in the share link. |
+| **Smoothing slider** | `#smooth` range | Controls the difficulty curve's kernel bandwidth (0.5–25%, default **1.5%**); persisted in the share link. |
+| **Collapse list / back to top** | `#toggleList`, `#toTop` | Hide the manual list so long input sets don't force scrolling (collapse state rides in the share link); a floating back-to-top button appears past 320 px of scroll. |
 | **Offline** | `sw.js` + `manifest.webmanifest` | Service worker caches all first-party assets; the app runs with no network after first load. "offline-ready" badge appears once cached. |
 
 **Offline & storage note:** the only persistence is the service-worker **asset** cache
