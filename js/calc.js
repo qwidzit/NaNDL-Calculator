@@ -260,6 +260,30 @@ export function parseInputsText(text){
   return out;
 }
 
+// Tally how many inputs use each frame-window size. Integer sizes from 1 up to
+// the largest one present are all included (zero-count ones too) so the spread
+// reads as a histogram rather than a sparse list; any non-integer sizes that
+// occur are folded in at their sorted position. Rows with an ignored window are
+// counted separately rather than bucketed. The zero-fill is capped so a stray
+// huge window can't spray thousands of empty buckets into the DOM.
+export function windowCounts(inputs, fillLimit=400){
+  const map=new Map();
+  let max=0, ignored=0, total=0;
+  for(const inp of (inputs||[])){
+    const k=inp && inp.k;
+    if(typeof k==='number' && isFinite(k) && k>0){
+      map.set(k,(map.get(k)||0)+1);
+      if(k>max) max=k;
+      total++;
+    } else ignored++;
+  }
+  const keys=new Set(map.keys());
+  const filled = max<=fillLimit;
+  if(filled) for(let i=1;i<=Math.floor(max);i++) keys.add(i);
+  const rows=[...keys].sort((a,b)=>a-b).map(k=>({k, count: map.get(k)||0}));
+  return {rows, max, total, ignored, distinct: map.size, filled};
+}
+
 /* ============================ JSON interchange ============================
  * The official NaNDL calculator exchanges runs as JSON containing the
  * frame-window rows, Game FPS, Window FPS, respawn time, and whether time

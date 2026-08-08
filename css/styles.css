@@ -190,3 +190,15 @@ table.breakdown .bits{color:var(--accent)}
 }
 .totop.show{opacity:1; pointer-events:auto; transform:none}
 .totop:hover{border-color:var(--accent); color:var(--txt)}
+
+/* window-size tally */
+.wcgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(76px,1fr)); gap:8px}
+.wccell{background:var(--panel2); border:1px solid var(--line); border-radius:8px;
+  padding:7px 8px 8px; position:relative; overflow:hidden}
+.wccell.empty{opacity:.38}
+.wccell .wk{font-size:11px; color:var(--accent2); font-weight:600}
+.wccell .wn{font-size:18px; font-weight:700; color:var(--txt); font-variant-numeric:tabular-nums; line-height:1.15}
+.wccell .wms{font-size:9.5px; color:#5b6675}
+.wccell .wbar{position:absolute; left:0; bottom:0; height:3px; background:var(--accent); opacity:.85}
+.wccell.peak{border-color:var(--accent)}
+.wccell.peak .wbar{background:var(--warn)}

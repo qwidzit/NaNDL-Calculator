@@ -13,7 +13,7 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 - ✅ **Refactored into files** — `index.html` + `css/styles.css` + `js/calc.js` (pure
   math) + `js/app.js` (UI). This is the live app.
 - ✅ **Regression tests** — `tests/calc.test.js`, Node's built-in runner (`npm test`,
-  zero deps). **27/27 pass**: the spec §6 values, the helper functions, JSON round-trips,
+  zero deps). **30/30 pass**: the spec §6 values, the helper functions, JSON round-trips,
   and a parity check against the official calculator's published equations.
 - ✅ **Feature set complete** — URL-shareable state, per-input breakdown, fps presets +
   validation, `.txt` export, run/segment scoring, and offline support (see below).
@@ -37,7 +37,7 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 | Feature | Where | Notes |
 |---|---|---|
 | **Refactor** (Step 1) | `index.html`, `css/`, `js/calc.js`, `js/app.js` | Behavior-preserving split; math is an importable ES module. |
-| **Regression tests** (Step 2) | `tests/calc.test.js` | `npm test` → 27/27, incl. an independent reimplementation of the official equations for parity. |
+| **Regression tests** (Step 2) | `tests/calc.test.js` | `npm test` → 30/30, incl. an independent reimplementation of the official equations for parity. |
 | **URL-shareable state** (Step 4) | `js/app.js` | Whole UI encoded in the `#s=` hash (base64 JSON) — including every **mode** (histogram/manual, solve/fixed precision, seconds/%/frames, list collapsed) so a shared link opens in the right view. **Copy shareable link** button; no browser storage. |
 | **Per-input breakdown** (Step 5) | `perInputStats()` + breakdown table | Each input's `p`/`reach` at L\*, time in **both seconds and %**, weakest inputs flagged & color-coded. |
 | **fps presets + validation** (Step 6) | Setup panel | 120 / 240 / 480 quick-select; blocks fps ≤ 0, warns on non-integer fps. |
@@ -55,6 +55,7 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 | **Difficulty profile** | `difficultyProfile()` + SVG chart | Manual mode only: a smooth difficulty curve across the level (Gaussian-kernel over input positions; difficulty = 1/(window·λ), where λ is the enabled modifiers' multiplier — so **modifiers reshape the curve**). Gradient fill, peak marker, hover readout (`x% · difficulty`), active run region shaded, "Modifiers applied" note when any is on. |
 | **Smoothing slider** | `#smooth` range | Controls the difficulty curve's kernel bandwidth (0.5–25%, default **1.5%**); persisted in the share link. |
 | **Collapse list / back to top** | `#toggleList`, `#toTop` | Hide the manual list so long input sets don't force scrolling (collapse state rides in the share link); a floating back-to-top button appears past 320 px of scroll. |
+| **Window-size tally** | `windowCounts()` + Window sizes panel | Bottom panel counting how many inputs use each frame window. Integer sizes 1…max are all shown (zero-count buckets dimmed) so the spread reads as a histogram; the most common size is highlighted, each cell shows its ms equivalent, ignored windows are counted separately, and the zero-fill is capped so a stray huge window can't spray buckets. Respects the run/segment slice. |
 | **Offline** | `sw.js` + `manifest.webmanifest` | Service worker caches all first-party assets; the app runs with no network after first load. "offline-ready" badge appears once cached. |
 
 **Offline & storage note:** the only persistence is the service-worker **asset** cache

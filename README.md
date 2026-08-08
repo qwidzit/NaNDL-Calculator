@@ -31,6 +31,8 @@ no accounts. Shareable state lives in the URL; the only persistence is an offlin
 - **`.txt` import / export** of the manual list, plus **JSON import / export** compatible with
   the official NaNDL calculator (frame-window rows, `gameFps`, `windowFps`, `respawnTime`,
   `useFrames`).
+- **Window-size tally** — a bottom panel counting how many inputs use each frame window
+  (1f…max, empty buckets included), with the most common size highlighted.
 - **Shareable links** — the whole UI state is encoded in the URL hash (no storage).
 - **Offline** — a service worker caches all assets, so it runs with no network after first load.
 

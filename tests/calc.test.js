@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { erf, passProb, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile,
          parseInputsText, NANDL_CONSTANTS, parseCalculatorJson, buildCalculatorJson,
-         localCps, grindEntropy } from "../js/calc.js";
+         localCps, grindEntropy, windowCounts } from "../js/calc.js";
 
 // Shared setup from spec §6: f=240, T=60s, target=24h, modifiers off unless noted.
 const F = 240;
@@ -424,4 +424,40 @@ test("grindEntropy: independent of respawn, monotonically falls as precision ris
   const withIgnored = { ...base, inputs: [...inputs, { t: 3, k: null }] };
   approxRel(grindEntropy(50, withIgnored).bits, grindEntropy(50, base).bits, 1e-12,
             "ignored input costs 0 bits");
+});
+
+/* ===================== window-size tally =================================== */
+
+test("windowCounts: tallies sizes and fills the gaps with zeros", () => {
+  const inputs = [
+    { t: 1, k: 2 }, { t: 2, k: 2 }, { t: 3, k: 5 }, { t: 4, k: 1 }, { t: 5, k: 5 }, { t: 6, k: 5 },
+  ];
+  const w = windowCounts(inputs);
+  assert.equal(w.max, 5);
+  assert.equal(w.total, 6, "all six counted");
+  assert.equal(w.distinct, 3, "1f, 2f, 5f");
+  // every integer 1..max present, including the empty 3f and 4f buckets
+  assert.deepEqual(w.rows, [
+    { k: 1, count: 1 }, { k: 2, count: 2 }, { k: 3, count: 0 },
+    { k: 4, count: 0 }, { k: 5, count: 3 },
+  ]);
+  // counts sum back to the number of timed inputs
+  assert.equal(w.rows.reduce((a, r) => a + r.count, 0), w.total);
+});
+
+test("windowCounts: ignored windows counted apart, decimals kept in order", () => {
+  const inputs = [ { t: 1, k: 3 }, { t: 2, k: null }, { t: 3, k: 1.5 }, { t: 4, k: 3 } ];
+  const w = windowCounts(inputs);
+  assert.equal(w.ignored, 1, "ignored row not bucketed");
+  assert.equal(w.total, 3);
+  assert.deepEqual(w.rows.map(r => r.k), [1, 1.5, 2, 3], "decimal slots into sorted position");
+  assert.equal(w.rows.find(r => r.k === 1.5).count, 1);
+  assert.equal(w.rows.find(r => r.k === 3).count, 2);
+});
+
+test("windowCounts: huge windows skip the zero-fill", () => {
+  const w = windowCounts([{ t: 1, k: 5 }, { t: 2, k: 100000 }], 400);
+  assert.equal(w.filled, false, "fill suppressed past the limit");
+  assert.deepEqual(w.rows.map(r => r.k), [5, 100000], "only present sizes listed");
+  assert.equal(windowCounts([]).rows.length, 0, "empty input -> no rows");
 });

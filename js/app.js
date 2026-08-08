@@ -6,7 +6,8 @@
 // ============================================================================
 
 import { MAXW, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile,
-         parseInputsText, parseCalculatorJson, buildCalculatorJson, grindEntropy } from "./calc.js";
+         parseInputsText, parseCalculatorJson, buildCalculatorJson, grindEntropy,
+         windowCounts } from "./calc.js";
 
 let mode="hist";
 let unit="sec";
@@ -313,6 +314,30 @@ function fmtCount(v){
   if(!isFinite(v)) return '∞';
   return v>=1e5 ? v.toExponential(2) : Math.round(v).toLocaleString();
 }
+// ---- window-size tally -----------------------------------------------------
+function renderWindowCounts(inputs,runActive,rangeLabel){
+  const panel=$('wcPanel'), grid=$('wcGrid'), note=$('wcNote');
+  const w=windowCounts(inputs);
+  if(w.rows.length===0){ panel.classList.add('hidden'); return; }
+  const f=num('fps');
+  const peak=Math.max(...w.rows.map(r=>r.count));
+  grid.innerHTML=w.rows.map(r=>{
+    const pct = peak>0 ? Math.round(r.count/peak*100) : 0;
+    const cls = `wccell${r.count===0?' empty':''}${r.count===peak&&peak>0?' peak':''}`;
+    const ms = f>0 ? (1000*r.k/f).toFixed(2)+'ms' : '';
+    return `<div class="${cls}"><div class="wk">${r.k}f</div>`+
+           `<div class="wn">${r.count}</div>`+
+           `<div class="wms">${ms}</div>`+
+           `<div class="wbar" style="width:${pct}%"></div></div>`;
+  }).join('');
+  const what = runActive ? `run (${rangeLabel})` : 'level';
+  const bits=[`<b>${w.total}</b> timed input${w.total===1?'':'s'} across <b>${w.distinct}</b> distinct window size${w.distinct===1?'':'s'} in this ${what}`];
+  if(w.ignored>0) bits.push(`<b>${w.ignored}</b> ignored`);
+  if(!w.filled) bits.push(`gaps not filled (largest window is ${w.max}f)`);
+  note.innerHTML=bits.join(' &nbsp;·&nbsp; ')+'.';
+  panel.classList.remove('hidden');
+}
+
 function renderG(g,refL,count,runActive,rangeLabel){
   const note=$('gnote');
   if(!g || !(refL>0)){
@@ -518,7 +543,8 @@ function recompute(){
 
   const stats=$('stats'), big=$('lstar'), rsub=$('rsub');
   const show=(msg)=>{big.textContent='—'; rsub.className='rsub msg'; rsub.textContent=msg; stats.style.display='none';
-    $('breakdown').classList.add('hidden'); $('gPanel').classList.add('hidden');};
+    $('breakdown').classList.add('hidden'); $('gPanel').classList.add('hidden');
+    $('wcPanel').classList.add('hidden');};
 
   if(!(T>0)) return show('Enter a level length greater than 0.');
   if(!(f>0)) return show('Enter a frame rate greater than 0.');
@@ -567,6 +593,7 @@ function recompute(){
   renderG(g,refL,inputs.length,runActive,rangeLabel);
 
   renderBreakdown(L,cfg,Teff,runActive,rangeLabel,g);
+  renderWindowCounts(inputs,runActive,rangeLabel);
 }
 
 // ---- URL-shareable state (no browser storage — state lives in the hash) ----
