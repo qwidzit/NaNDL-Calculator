@@ -103,11 +103,19 @@
         <input type="number" id="skill" value="100" min="0.0001" step="any">
         <div class="hint">stats are computed at this fixed precision</div>
       </div>
+    </div>
+    <div class="row" style="margin-top:14px">
       <div class="field">
         <label>Reference precision (for G)</label>
         <input type="number" id="refL" value="100" min="0.0001" step="any">
         <div class="hint">grind entropy is measured at this precision</div>
       </div>
+      <div class="field">
+        <label>Reference precision (for T)</label>
+        <input type="number" id="refT" value="200" min="0.0001" step="any">
+        <div class="hint">grind time is measured at this precision</div>
+      </div>
+      <div class="field"></div>
     </div>
   </div>
 
@@ -230,6 +238,20 @@
     <div class="totline" id="gnote"></div>
   </div>
 
+  <div class="panel" id="tPanel">
+    <h2>Grind time &nbsp;T <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— difficulty weighted by <i>where</i> it hurts</span></h2>
+    <div class="grow">
+      <div class="gbig" id="tbig">—</div>
+      <div class="gside">
+        <div class="gstat"><b id="tattempts">—</b><span>expected attempts</span></div>
+        <div class="gstat"><b id="tref">—</b><span>at reference precision</span></div>
+        <div class="gstat"><b id="tworst">—</b><span>costliest input</span></div>
+        <div class="gstat"><b id="tclear">—</b><span>the winning run itself</span></div>
+      </div>
+    </div>
+    <div class="totline" id="tnote"></div>
+  </div>
+
   <div class="panel hidden" id="diffPanel">
     <h2>Difficulty profile <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— estimated difficulty across the level (manual mode)</span></h2>
     <div class="diffhead">
@@ -251,12 +273,14 @@
     <div class="body">
       <p style="margin-top:0">Each input at <b>L*</b>: its pass probability <code>p</code>, the chance of reaching it
       alive <code>reach</code>, and — since a run is scored on its own — times shown in <b>both</b> seconds and % of
-      the scored length. The <span class="weak-tag">weakest</span> inputs (lowest <code>p</code>) are where the level fights back.</p>
+      the scored length. The <span class="weak-tag">weakest</span> inputs (lowest <code>p</code>) are where the level fights back.
+      <b>bits</b> is the input's share of <b>G</b> (at G's reference precision) and <b>time lost</b> is its share of
+      <b>T</b> (at T's reference precision) — the same window costs far more time late in a run than early.</p>
       <div class="tablewrap">
         <table class="breakdown" id="bdTable">
           <thead><tr>
             <th>#</th><th>Time (s)</th><th>Time (%)</th><th>Window</th><th>ms</th>
-            <th>p (pass)</th><th>reach</th><th>bits</th>
+            <th>p (pass)</th><th>reach</th><th>bits (G)</th><th>time lost (T)</th>
           </tr></thead>
           <tbody id="bdBody"></tbody>
         </table>
@@ -334,6 +358,20 @@
       <p>G is measured at a <b>reference precision</b> you set &mdash; that is what buys the additivity, since a level's
       improbability depends on who is playing it. Respawn time does not affect G: it changes how long an attempt costs,
       not how improbable one is.</p>
+
+      <h4>Grind time (T)</h4>
+      <p><code>P(C)</code> is a product, so <b>G</b> cannot tell where a hard input sits — a 1-frame window on the
+      first click scores the same as one on the last. The expected completion time can, because failures are weighted
+      by how far you got:</p>
+      <p><code>T = E[T&#9557;] = t&#8345; + respawn/P(C) + &sum; cost&#8341;</code>, where
+      <code>cost&#8341; = t&#8341;&middot;r&#8341;&middot;q&#8341; / P(C)</code></p>
+      <p>Miss the first input and you lose a fraction of a second before retrying; miss the last and every failure
+      burns a whole run, and you only get there <code>r&#8341;</code> of the time. So <code>cost&#8341;</code> — each
+      input's share of the total grind, shown in the breakdown's <b>time lost</b> column — climbs steeply toward the
+      end of a level. T has its own <b>reference precision</b> (default 200) since the times explode at lower ones.</p>
+      <p>The three measures answer different questions: <b>L*</b> &ldquo;how sharp must you be?&rdquo;, <b>G</b>
+      &ldquo;how improbable is a clean run?&rdquo; (additive, position-blind), <b>T</b> &ldquo;how long will this
+      actually take?&rdquo; (position-sensitive, not additive).</p>
 
       <h4>JSON interchange</h4>
       <p><b>Import JSON</b> / <b>Export JSON</b> exchange runs with the official calculator. A document carries the

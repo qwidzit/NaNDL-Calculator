@@ -1,7 +1,7 @@
 // Offline service worker — caches all first-party assets so the calculator
 // works with no network after the first load. Bump CACHE to ship updated files
 // (cache-first means clients otherwise keep the cached version).
-const CACHE = "nandl-v11";
+const CACHE = "nandl-v12";
 const ASSETS = [
   "./",
   "./index.html",

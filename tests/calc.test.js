@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { erf, passProb, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile,
          parseInputsText, NANDL_CONSTANTS, parseCalculatorJson, buildCalculatorJson,
-         localCps, grindEntropy, windowCounts } from "../js/calc.js";
+         localCps, grindEntropy, windowCounts, grindTime } from "../js/calc.js";
 
 // Shared setup from spec §6: f=240, T=60s, target=24h, modifiers off unless noted.
 const F = 240;
@@ -460,4 +460,64 @@ test("windowCounts: huge windows skip the zero-fill", () => {
   assert.equal(w.filled, false, "fill suppressed past the limit");
   assert.deepEqual(w.rows.map(r => r.k), [5, 100000], "only present sizes listed");
   assert.equal(windowCounts([]).rows.length, 0, "empty input -> no rows");
+});
+
+/* ===================== grind time (T) ===================================== */
+
+const REF_T = 200;   // reference precision the UI defaults to for T
+
+test("grindTime: decomposition sums to the total, and matches evaluate", () => {
+  const inputs = [ { t: 2, k: 3 }, { t: 5, k: 2 }, { t: 9, k: 4 } ];
+  const cfg = { inputs, f: F, T: 9, mods: modsOff, respawn: 0.7 };
+  const g = grindTime(REF_T, cfg);
+
+  // agrees with the headline calculation
+  approxRel(g.seconds, evaluate(REF_T, cfg).ETC, 1e-9, "T == E[T_C]");
+  approxRel(g.attempts, 1 / g.PC, 1e-9, "attempts = 1/P(C)");
+
+  // E[T_C] = t_n + respawn/P(C) + Σ costᵢ
+  const total = g.clearTime + g.respawnCost + g.per.reduce((a, b) => a + b, 0);
+  approxRel(total, g.seconds, 1e-9, "per-input costs + clear + respawn = total");
+});
+
+test("grindTime is position-sensitive: a late tight window costs far more", () => {
+  // Same windows, same P(C) — only the ORDER of the tight 1f input differs.
+  const early = [ { t: 1, k: 1 }, { t: 20, k: 6 }, { t: 40, k: 6 }, { t: 60, k: 6 } ];
+  const late  = [ { t: 1, k: 6 }, { t: 20, k: 6 }, { t: 40, k: 6 }, { t: 60, k: 1 } ];
+  const mk = inputs => ({ inputs, f: F, T: 60, mods: modsOff });
+
+  const a = grindTime(REF_T, mk(early));
+  const b = grindTime(REF_T, mk(late));
+
+  // P(C) is a product, so it is identical — G would score these the same...
+  approxRel(b.PC, a.PC, 1e-12, "same completion probability");
+  approxRel(grindEntropy(REF_T, mk(late)).bits, grindEntropy(REF_T, mk(early)).bits,
+            1e-12, "G cannot tell them apart");
+  // ...but the grind time can, and says the late one is much worse.
+  assert.ok(b.seconds > a.seconds * 2,
+    `late 1f should cost far more time (${a.seconds.toFixed(1)}s -> ${b.seconds.toFixed(1)}s)`);
+
+  // The effect is starkest per-input: totals carry a fixed floor (the winning
+  // run still takes t_n), which damps the ratio. The 1f window itself goes from
+  // a couple of seconds of retries to over a hundred purely by moving late.
+  const tightEarly = a.per[0], tightLate = b.per[3];
+  assert.ok(tightLate > tightEarly * 20,
+    `the same 1f window should cost far more late (${tightEarly.toFixed(1)}s -> ${tightLate.toFixed(1)}s)`);
+
+  // and the cost is attributed to the right input
+  assert.equal(a.per.indexOf(Math.max(...a.per)), 0, "early case: first input dominates");
+  assert.equal(b.per.indexOf(Math.max(...b.per)), 3, "late case: last input dominates");
+});
+
+test("grindTime: respawn and precision move it the expected way", () => {
+  const inputs = [ { t: 2, k: 2 }, { t: 6, k: 3 } ];
+  const base = { inputs, f: F, T: 6, mods: modsOff };
+  assert.ok(grindTime(REF_T, { ...base, respawn: 3 }).seconds > grindTime(REF_T, base).seconds,
+    "respawn adds time");
+  assert.ok(grindTime(400, base).seconds < grindTime(REF_T, base).seconds,
+    "a sharper player finishes sooner");
+  // an ignored window is free: it never costs a retry
+  const withIgnored = { ...base, inputs: [...inputs, { t: 7, k: null }] };
+  const gi = grindTime(REF_T, withIgnored);
+  approxRel(gi.per[2], 0, 1e-12, "ignored input costs no time");
 });

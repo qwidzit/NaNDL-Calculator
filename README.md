@@ -28,6 +28,9 @@ no accounts. Shareable state lives in the URL; the only persistence is an offlin
 - **Grind entropy `G`** — an additive difficulty scale: `G = −log₂ P(C)` in bits, measured at a
   reference precision you set. Expected attempts ≈ `2^G`, one extra bit = twice the grind, and
   unlike `L*` it adds exactly across segments (`G(A then B) = G(A) + G(B)`).
+- **Grind time `T`** — expected completion time at its own reference precision (default 200).
+  Unlike `G` it is **position-sensitive**: the same 1f window costs a fraction of a second on the
+  first input but a whole run on the last, and the breakdown attributes the time per input.
 - **`.txt` import / export** of the manual list, plus **JSON import / export** compatible with
   the official NaNDL calculator (frame-window rows, `gameFps`, `windowFps`, `respawnTime`,
   `useFrames`).

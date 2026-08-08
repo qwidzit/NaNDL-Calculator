@@ -7,7 +7,7 @@
 
 import { MAXW, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile,
          parseInputsText, parseCalculatorJson, buildCalculatorJson, grindEntropy,
-         windowCounts } from "./calc.js";
+         windowCounts, grindTime } from "./calc.js";
 
 let mode="hist";
 let unit="sec";
@@ -304,6 +304,16 @@ function readManual(T){
 
 // ---- per-input breakdown ---------------------------------------------------
 function fmtProb(v){ return v<1e-4 ? v.toExponential(1) : (v*100).toFixed(2)+'%'; }
+function fmtDur(sec){
+  if(!isFinite(sec)) return '∞';
+  if(sec<60)      return sec.toFixed(1)+' s';
+  if(sec<3600)    return (sec/60).toFixed(1)+' min';
+  if(sec<172800)  return (sec/3600).toFixed(1)+' h';
+  const d=sec/86400;
+  if(d<365)       return d.toFixed(1)+' d';
+  const y=d/365;
+  return y>=1e4 ? y.toExponential(2)+' y' : y.toFixed(1)+' y';
+}
 function fmtHours(h){
   if(!isFinite(h)) return '∞';
   if(h>=1e6) return h.toExponential(2)+' h';
@@ -338,6 +348,39 @@ function renderWindowCounts(inputs,runActive,rangeLabel){
   panel.classList.remove('hidden');
 }
 
+function renderT(tg,refT,inputs,runActive,rangeLabel){
+  const note=$('tnote');
+  if(!tg || !(refT>0)){
+    ['tbig','tattempts','tref','tworst','tclear'].forEach(id=>$(id).textContent='—');
+    note.innerHTML='<span style="color:var(--warn)">Enter a reference precision greater than 0.</span>';
+    return;
+  }
+  $('tbig').textContent=fmtDur(tg.seconds);
+  $('tattempts').textContent = isFinite(tg.attempts)
+    ? (tg.attempts>=1e5 ? tg.attempts.toExponential(2) : Math.round(tg.attempts).toLocaleString())
+    : '∞';
+  $('tref').textContent=refT.toLocaleString(undefined,{maximumFractionDigits:2});
+  $('tclear').textContent=fmtDur(tg.clearTime);
+
+  // which input eats the most grind, and what share of the total it is
+  let wi=-1, wv=-1;
+  tg.per.forEach((v,i)=>{ if(isFinite(v)&&v>wv){wv=v;wi=i;} });
+  if(wi>=0 && wv>0){
+    const inp=inputs[wi];
+    const share = tg.seconds>0 && isFinite(tg.seconds) ? (wv/tg.seconds*100) : 0;
+    $('tworst').textContent=`#${wi+1} · ${fmtDur(wv)}`;
+    note.innerHTML=`Expected time to complete this ${runActive?`run (${rangeLabel})`:'level'} at precision `+
+      `<b>${refT.toLocaleString(undefined,{maximumFractionDigits:2})}</b>. `+
+      `The costliest single input is <b>#${wi+1}</b> at <b>${inp.t.toFixed(2)}s</b>`+
+      `${inp.k>0?` (<b>${inp.k}f</b>)`:''}, burning <b>${share.toFixed(0)}%</b> of the total — `+
+      `late windows cost far more than early ones, which is what <b>G</b> can't see.`;
+  } else {
+    $('tworst').textContent='—';
+    note.innerHTML=`Expected time to complete this ${runActive?`run (${rangeLabel})`:'level'} at precision `+
+      `<b>${refT.toLocaleString(undefined,{maximumFractionDigits:2})}</b>.`;
+  }
+}
+
 function renderG(g,refL,count,runActive,rangeLabel){
   const note=$('gnote');
   if(!g || !(refL>0)){
@@ -361,7 +404,7 @@ function renderG(g,refL,count,runActive,rangeLabel){
     `One extra bit = twice the grind, and segments <b>add</b>: G(A then B) = G(A) + G(B).`;
 }
 
-function renderBreakdown(Lstar,cfg,Teff,runActive,rangeLabel,g){
+function renderBreakdown(Lstar,cfg,Teff,runActive,rangeLabel,g,tg){
   const bd=$('breakdown'), body=$('bdBody');
   const per=perInputStats(Lstar,cfg);
   body.innerHTML='';
@@ -385,7 +428,8 @@ function renderBreakdown(Lstar,cfg,Teff,runActive,rangeLabel,g){
       <td>${ms}</td>
       <td class="pbar ${pClass}">${fmtProb(s.p)}${weak?' <span class="weak-tag">weak</span>':''}</td>
       <td>${fmtProb(s.r)}</td>
-      <td class="bits">${g&&isFinite(g.per[i])?(g.per[i]<0.001?g.per[i].toExponential(1):g.per[i].toFixed(3)):'—'}</td>`;
+      <td class="bits">${g&&isFinite(g.per[i])?(g.per[i]<0.001?g.per[i].toExponential(1):g.per[i].toFixed(3)):'—'}</td>
+      <td class="tcost">${tg?fmtDur(tg.per[i]):'—'}</td>`;
     body.appendChild(tr);
   });
   $('bdCount').textContent=`— ${per.length} input${per.length>1?'s':''}${runActive?` in run ${rangeLabel}`:''}`;
@@ -544,7 +588,7 @@ function recompute(){
   const stats=$('stats'), big=$('lstar'), rsub=$('rsub');
   const show=(msg)=>{big.textContent='—'; rsub.className='rsub msg'; rsub.textContent=msg; stats.style.display='none';
     $('breakdown').classList.add('hidden'); $('gPanel').classList.add('hidden');
-    $('wcPanel').classList.add('hidden');};
+    $('wcPanel').classList.add('hidden'); $('tPanel').classList.add('hidden');};
 
   if(!(T>0)) return show('Enter a level length greater than 0.');
   if(!(f>0)) return show('Enter a frame rate greater than 0.');
@@ -592,7 +636,14 @@ function recompute(){
   const g = refL>0 ? grindEntropy(refL,cfg) : null;
   renderG(g,refL,inputs.length,runActive,rangeLabel);
 
-  renderBreakdown(L,cfg,Teff,runActive,rangeLabel,g);
+  // Grind time at its own reference precision — position-sensitive, so it says
+  // what G can't: a tight window late in the run costs whole attempts.
+  $('tPanel').classList.remove('hidden');
+  const refT=num('refT');
+  const tg = refT>0 ? grindTime(refT,cfg) : null;
+  renderT(tg,refT,inputs,runActive,rangeLabel);
+
+  renderBreakdown(L,cfg,Teff,runActive,rangeLabel,g,tg);
   renderWindowCounts(inputs,runActive,rangeLabel);
 }
 
@@ -619,7 +670,7 @@ function serialize(){
     run:[$('runOn').checked?1:0, $('runRange').value],
     sm:$('smooth').value,
     gf:$('gameFps').value, rs:$('respawn').value,
-    cm:calcMode, sk:$('skill').value, rl:$('refL').value, lh:listHidden?1:0,
+    cm:calcMode, sk:$('skill').value, rl:$('refL').value, rt:$('refT').value, lh:listHidden?1:0,
   };
 }
 function updateHash(){
@@ -650,6 +701,7 @@ function restore(){
     if(st.rs!=null) $('respawn').value=st.rs;
     if(st.sk!=null) $('skill').value=st.sk;
     if(st.rl!=null) $('refL').value=st.rl;
+    if(st.rt!=null) $('refT').value=st.rt;
     applyListUI(!!st.lh);
     // run
     if(st.run){ $('runOn').checked=!!st.run[0]; $('runRange').value=st.run[1]??''; }

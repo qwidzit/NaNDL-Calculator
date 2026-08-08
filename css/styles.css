@@ -23,7 +23,8 @@ input[type=number], input[type=text]{
 input[type=number]:focus, input[type=text]:focus{outline:none; border-color:var(--accent2)}
 input::placeholder{color:#4c5766}
 .row{display:flex; gap:16px; flex-wrap:wrap}
-.field{flex:1; min-width:150px}
+.field{flex:1; min-width:170px}
+.field .seg{max-width:100%; flex-wrap:wrap}
 .field .hint{font-size:11px; color:var(--muted); margin-top:3px}
 .grid{display:grid; grid-template-columns:repeat(5,1fr); gap:10px}
 .cell{background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:8px}
@@ -202,3 +203,4 @@ table.breakdown .bits{color:var(--accent)}
 .wccell .wbar{position:absolute; left:0; bottom:0; height:3px; background:var(--accent); opacity:.85}
 .wccell.peak{border-color:var(--accent)}
 .wccell.peak .wbar{background:var(--warn)}
+table.breakdown .tcost{color:var(--warn)}

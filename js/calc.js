@@ -179,6 +179,43 @@ export function grindEntropy(L,cfg){
   return {bits, per, attempts: Math.pow(2,bits)};
 }
 
+// Grind time — the expected wall-clock time to complete, at a reference
+// precision L. Where G measures how *improbable* a run is, T measures how
+// *expensive* it is, and unlike G it is position-sensitive:
+//
+//     E[T_C] = t_n + respawn/P(C) + Σᵢ costᵢ,   costᵢ = tᵢ·rᵢ·qᵢ / P(C)
+//
+// P(C) is a product, so it does not care where the hard input sits. The failure
+// term does: costᵢ scales with tᵢ (how much of the run you'd already spent) and
+// with rᵢ (how often you actually get that far). A tight window on the first
+// input is cheap — you die instantly and retry. The same window on the last
+// input costs a full run every time you miss it.
+//
+// `per` gives each input's share of the total in seconds, so the breakdown shows
+// exactly where the grind goes. per + clearTime + respawnCost sums to seconds.
+export function grindTime(L,cfg){
+  const {inputs,T,respawn=0}=cfg;
+  const M=inputs.length;
+  if(M===0) return {seconds:Infinity,hours:Infinity,attempts:Infinity,per:[],
+                    clearTime:0,respawnCost:Infinity,PC:0,ETA:respawn};
+  const ps=passProbs(L,cfg);
+  let logPC=0; for(let j=0;j<M;j++) logPC+=Math.log(ps[j]);
+  const PC=Math.exp(logPC);
+  const tn=Math.max(T, inputs[M-1].t);
+  const per=new Array(M);
+  let r=1, sumFail=0;
+  for(let j=0;j<M;j++){
+    const cost=inputs[j].t*r*(1-ps[j]);
+    sumFail+=cost;
+    per[j] = PC>0 ? cost/PC : Infinity;
+    r*=ps[j];
+  }
+  const ETA=tn*PC+sumFail+respawn;
+  const seconds = PC>0 ? ETA/PC : Infinity;
+  return {seconds, hours:seconds/3600, attempts: PC>0?1/PC:Infinity, ETA, PC, per,
+          clearTime:tn, respawnCost: PC>0?respawn/PC:Infinity};
+}
+
 // Bisection for L* where E[T_C] == targetSec. Expands the upper bracket first.
 export function solveLstar(cfg,targetSec){
   if(cfg.inputs.length===0) return null;
