@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { erf, passProb, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile,
          parseInputsText, NANDL_CONSTANTS, parseCalculatorJson, buildCalculatorJson,
-         localCps, grindEntropy, windowCounts, grindTime } from "../js/calc.js";
+         localCps, grindEntropy, windowCounts, grindTime, excludeWindows } from "../js/calc.js";
 
 // Shared setup from spec §6: f=240, T=60s, target=24h, modifiers off unless noted.
 const F = 240;
@@ -520,4 +520,40 @@ test("grindTime: respawn and precision move it the expected way", () => {
   const withIgnored = { ...base, inputs: [...inputs, { t: 7, k: null }] };
   const gi = grindTime(REF_T, withIgnored);
   approxRel(gi.per[2], 0, 1e-12, "ignored input costs no time");
+});
+
+/* ===================== exclude large windows ============================== */
+
+test("excludeWindows: drops windows at or above the threshold", () => {
+  const inputs = [
+    { t: 1, k: 3 }, { t: 2, k: 10 }, { t: 3, k: 11 }, { t: 4, k: 15 }, { t: 5, k: 7 },
+  ];
+  const kept = excludeWindows(inputs, 11);
+  assert.deepEqual(kept.map(i => i.k), [3, 10, 7], "11f and 15f removed, 10f kept");
+  assert.notEqual(kept, inputs, "returns a new array");
+  assert.equal(inputs.length, 5, "source untouched");
+
+  // threshold is inclusive at the boundary
+  assert.deepEqual(excludeWindows(inputs, 10).map(i => i.k), [3, 7]);
+  // a threshold above everything keeps all of them
+  assert.equal(excludeWindows(inputs, 99).length, 5);
+  // an absent or invalid threshold is a no-op
+  assert.equal(excludeWindows(inputs, 0).length, 5);
+  assert.equal(excludeWindows(inputs, NaN).length, 5);
+});
+
+test("excludeWindows: leaves ignored windows alone and raises the difficulty", () => {
+  const inputs = [ { t: 1, k: 4 }, { t: 2, k: null }, { t: 3, k: 12 } ];
+  const kept = excludeWindows(inputs, 11);
+  assert.equal(kept.length, 2, "12f dropped, ignored row survives");
+  assert.equal(kept[1].k, null, "ignored row kept as-is");
+
+  // Removing easy windows can only remove bits, so G falls and L* falls with it.
+  const full = [ { t: 1, k: 3 }, { t: 2, k: 5 }, { t: 3, k: 12 }, { t: 4, k: 14 } ];
+  const cut  = excludeWindows(full, 11);
+  const mk = list => ({ inputs: list, f: F, T: 4, mods: modsOff });
+  assert.ok(grindEntropy(150, mk(cut)).bits < grindEntropy(150, mk(full)).bits,
+    "dropping easy windows lowers G");
+  assert.ok(solveLstar(mk(cut), TARGET_SEC) < solveLstar(mk(full), TARGET_SEC),
+    "...and lowers the required precision");
 });

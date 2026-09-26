@@ -13,7 +13,7 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 - ✅ **Refactored into files** — `index.html` + `css/styles.css` + `js/calc.js` (pure
   math) + `js/app.js` (UI). This is the live app.
 - ✅ **Regression tests** — `tests/calc.test.js`, Node's built-in runner (`npm test`,
-  zero deps). **33/33 pass**: the spec §6 values, the helper functions, JSON round-trips,
+  zero deps). **35/35 pass**: the spec §6 values, the helper functions, JSON round-trips,
   and a parity check against the official calculator's published equations.
 - ✅ **Feature set complete** — URL-shareable state, per-input breakdown, fps presets +
   validation, `.txt` export, run/segment scoring, and offline support (see below).
@@ -37,7 +37,7 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 | Feature | Where | Notes |
 |---|---|---|
 | **Refactor** (Step 1) | `index.html`, `css/`, `js/calc.js`, `js/app.js` | Behavior-preserving split; math is an importable ES module. |
-| **Regression tests** (Step 2) | `tests/calc.test.js` | `npm test` → 33/33, incl. an independent reimplementation of the official equations for parity. |
+| **Regression tests** (Step 2) | `tests/calc.test.js` | `npm test` → 35/35, incl. an independent reimplementation of the official equations for parity. |
 | **URL-shareable state** (Step 4) | `js/app.js` | Whole UI encoded in the `#s=` hash (base64 JSON) — including every **mode** (histogram/manual, solve/fixed precision, seconds/%/frames, list collapsed) so a shared link opens in the right view. **Copy shareable link** button; no browser storage. |
 | **Per-input breakdown** (Step 5) | `perInputStats()` + breakdown table | Each input's `p`/`reach` at L\*, time in **both seconds and %**, weakest inputs flagged & color-coded. |
 | **fps presets + validation** (Step 6) | Setup panel | 120 / 240 / 480 quick-select; blocks fps ≤ 0, warns on non-integer fps. |
@@ -51,6 +51,7 @@ See `NaNDL_calculator_spec.md` for the full math + behavior handoff.
 | **Grind time (T)** | `grindTime()` + T panel | Expected wall-clock time to complete, at its own reference precision (default **200**): `T = tₙ + respawn/P(C) + Σ costᵢ`, `costᵢ = tᵢ·rᵢ·qᵢ/P(C)`. **Position-sensitive** — `P(C)` is a product so G can't see where a hard input sits, but a late miss burns a whole run. Per-input `costᵢ` shown as the breakdown's **time lost** column; the panel names the costliest input and its share. Not additive (that's G's job). |
 | **Official constants** | `NANDL_CONSTANTS` | `k_t=0.0016520833717346`, `k_u=0.0002727763242154`, `k_c=0.2784421686721826` — the calibrated values from nandl.pages.dev, replacing the placeholders. Verified our `evaluate()` matches the official published equations to 1e-9. Fatigue's BROKEN? tag removed; CPS now tagged **WIP** (upstream still calls it unreliable). |
 | **`.txt` import / export** | `parseInputsText()` + Import/Export | Import accepts each line as `time`/`window` separated by a **dash, a tab, or spaces** (so spreadsheet-pasted `0.55⇥3` works alongside `1.5 - 3`), and an optional **unit label** on either number is ignored (`35.29 - 5f`, `35.29 - 5 frames`); export mirrors the `time - window` form and round-trips. |
+| **Exclude wide windows** | `excludeWindows()` + Run panel | "Exclude 11+" drops every input whose window is at least the threshold (editable, default 11f), so only the tight inputs are scored. Applied before the run slice, so the two combine; ignored (`-`) rows have no size and are left alone. The level length field still sets `tₙ`, so dropping inputs never shortens the run. |
 | **Run / segment** | `sliceRun()` + Run panel | A range like `23.2 - 81.8` scores only that slice as its own level (inputs re-based to start at 0, length = to − from). Range respects the Seconds/% switch; the hint and breakdown show **both units**. |
 | **Clear all + confirm** | manual tools + confirm modal | "Clear all" empties the manual list behind a confirm popup ("This can't be undone", input count shown); Esc/Cancel/backdrop dismiss. |
 | **Difficulty profile** | `difficultyProfile()` + SVG chart | Manual mode only: a smooth difficulty curve across the level (Gaussian-kernel over input positions; difficulty = 1/(window·λ), where λ is the enabled modifiers' multiplier — so **modifiers reshape the curve**). Gradient fill, peak marker, hover readout (`x% · difficulty`), active run region shaded, "Modifiers applied" note when any is on. |

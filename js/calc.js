@@ -321,6 +321,19 @@ export function windowCounts(inputs, fillLimit=400){
   return {rows, max, total, ignored, distinct: map.size, filled};
 }
 
+// Drop every input whose frame window is `minK` or larger — a quick way to score
+// only the tight part of a level and ignore the windows you never miss. Rows with
+// an ignored window (no numeric size) are left alone; they already pass for free.
+// The level length is a separate field, so removing trailing inputs does not
+// shorten the run: t_n still comes from max(T, last remaining input).
+export function excludeWindows(inputs, minK){
+  if(!(minK>0)) return (inputs||[]).slice();
+  return (inputs||[]).filter(inp=>{
+    const k=inp && inp.k;
+    return !(typeof k==='number' && isFinite(k) && k>=minK);
+  });
+}
+
 /* ============================ JSON interchange ============================
  * The official NaNDL calculator exchanges runs as JSON containing the
  * frame-window rows, Game FPS, Window FPS, respawn time, and whether time

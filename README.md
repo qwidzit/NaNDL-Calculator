@@ -15,6 +15,8 @@ no accounts. Shareable state lives in the URL; the only persistence is an offlin
   **manual list** of exact `time → window` inputs. Times read as **seconds or %** of the level.
 - **Run / segment scoring** — a range like `23.2 - 81.8` scores just that slice as its own
   level (inputs re-based to start at 0). Works in both seconds and %.
+- **Exclude 11+** — drop every input at or above a window threshold (editable) to score only the
+  tight parts of a level; combines with the run/segment slice.
 - **Per-input breakdown** — each input's pass probability `p` and reach probability at `L*`,
   with times shown in both seconds and %, and the weakest inputs flagged.
 - **Modifiers** — optional Nerve / Fatigue / CPS multipliers (off by default), using the

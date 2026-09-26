@@ -7,7 +7,7 @@
 
 import { MAXW, histInputs, evaluate, solveLstar, perInputStats, sliceRun, difficultyProfile,
          parseInputsText, parseCalculatorJson, buildCalculatorJson, grindEntropy,
-         windowCounts, grindTime } from "./calc.js";
+         windowCounts, grindTime, excludeWindows } from "./calc.js";
 
 let mode="hist";
 let unit="sec";
@@ -553,6 +553,23 @@ function recompute(){
     inputs=readManual(T);
     $('manTotal').textContent=inputs.length;
   }
+  // Drop wide windows first, so every downstream view — difficulty profile, run
+  // slice, breakdown, tally, G and T — agrees on what is being scored.
+  const exOn=$('exOn').checked, exThr=num('exThr');
+  const exHint=$('exHint');
+  if(exOn && exThr>0){
+    const before=inputs.length;
+    inputs=excludeWindows(inputs,exThr);
+    const cut=before-inputs.length;
+    exHint.innerHTML=`Excluding windows of <b>${exThr}f</b> or wider &nbsp;·&nbsp; `+
+      `<b>${cut}</b> input${cut===1?'':'s'} dropped, <b>${inputs.length}</b> left.`;
+  } else if(exOn){
+    exHint.innerHTML='<span style="color:var(--warn)">Enter a minimum window of 1 or more.</span>';
+  } else {
+    exHint.textContent='Off — every window is scored.';
+  }
+  $('exLabel').textContent = exThr>0 ? String(exThr) : '11';
+
   // keep the full (pre-slice) manual list for the difficulty profile
   const fullInputs = mode==='manual' ? inputs.slice() : [];
 
@@ -593,7 +610,10 @@ function recompute(){
   if(!(T>0)) return show('Enter a level length greater than 0.');
   if(!(f>0)) return show('Enter a frame rate greater than 0.');
   if($('runOn').checked && !runValid) return show('Enter a valid run range like "23.2 - 81.8".');
-  if(inputs.length===0) return show(runActive?'No inputs fall inside the run range.':'Add at least one input.');
+  if(inputs.length===0) return show(
+    runActive ? 'No inputs fall inside the run range.'
+    : (exOn && exThr>0) ? `Every input is ${exThr}f or wider — nothing left to score.`
+    : 'Add at least one input.');
 
   const mods=readMods();
   const cfg={inputs, f, T:Teff, mods, respawn:Math.max(0,num('respawn'))};
@@ -670,7 +690,7 @@ function serialize(){
     run:[$('runOn').checked?1:0, $('runRange').value],
     sm:$('smooth').value,
     gf:$('gameFps').value, rs:$('respawn').value,
-    cm:calcMode, sk:$('skill').value, rl:$('refL').value, rt:$('refT').value, lh:listHidden?1:0,
+    cm:calcMode, sk:$('skill').value, rl:$('refL').value, rt:$('refT').value, lh:listHidden?1:0, ex:[$('exOn').checked?1:0, $('exThr').value],
   };
 }
 function updateHash(){
@@ -702,6 +722,7 @@ function restore(){
     if(st.sk!=null) $('skill').value=st.sk;
     if(st.rl!=null) $('refL').value=st.rl;
     if(st.rt!=null) $('refT').value=st.rt;
+    if(st.ex){ $('exOn').checked=!!st.ex[0]; if(st.ex[1]!=null) $('exThr').value=st.ex[1]; }
     applyListUI(!!st.lh);
     // run
     if(st.run){ $('runOn').checked=!!st.run[0]; $('runRange').value=st.run[1]??''; }

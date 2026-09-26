@@ -187,7 +187,19 @@
         <input type="text" id="runRange" placeholder="23.2 - 81.8" autocomplete="off">
       </div>
     </div>
+    <div class="modrow">
+      <label class="switch"><input type="checkbox" id="exOn"><span class="slider"></span></label>
+      <div class="name">
+        <b>Exclude <span id="exLabel">11</span>+</b>
+        <span class="desc">drop every input whose window is that many frames or wider — score only the tight parts</span>
+      </div>
+      <div class="runrange">
+        <label>Min window (f)</label>
+        <input type="number" id="exThr" min="1" step="1" value="11" autocomplete="off">
+      </div>
+    </div>
     <div class="totline" id="runHint">Off — the whole level is scored.</div>
+    <div class="totline" id="exHint">Off — every window is scored.</div>
   </div>
 
   <div class="panel">
@@ -335,6 +347,14 @@
       <p>Turn on <b>Calculate a run</b> and give a range like <code>23.2 - 81.8</code> to score only the inputs inside
       it. The slice is treated as its own level: its inputs are re-based so the run starts at 0 and its length becomes
       <code>to &minus; from</code>. The range is read in whatever the <b>Seconds / %</b> switch is set to.</p>
+
+      <h4>Excluding wide windows</h4>
+      <p><b>Exclude 11+</b> removes every input whose frame window is at least that wide, so only the
+      tight inputs are scored. Handy for asking &ldquo;how hard is this level if I never miss the easy
+      clicks?&rdquo;. The level length is a separate field, so dropping inputs never shortens the run —
+      <code>t&#8345;</code> still comes from the level length. Rows marked <code>-</code> (ignored) have no
+      window size and are left alone. The threshold is editable, and it applies before the run/segment
+      slice, so the two combine.</p>
 
       <h4>Modifiers</h4>
       <p>Each enabled modifier multiplies an input's effective window before the probability is taken: <b>Nerve</b>
