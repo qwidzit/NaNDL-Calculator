@@ -110,12 +110,8 @@ a{color:var(--accent2)}
 .foot a{color:var(--accent2); text-decoration:none}
 .foot a:hover{text-decoration:underline}
 
-/* top toolbar (share link + offline badge) */
+/* top toolbar (share link) */
 .toolbar{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px}
-.offline-badge{font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
-  color:var(--good); border:1px solid #2c5a44; background:#12241c; border-radius:20px; padding:3px 10px;
-  margin-left:auto; opacity:0; transition:opacity .3s}
-.offline-badge.show{opacity:1}
 
 /* fps presets */
 .presets{display:inline-flex; gap:6px; margin-top:6px}
@@ -204,3 +200,9 @@ table.breakdown .bits{color:var(--accent)}
 .wccell.peak{border-color:var(--accent)}
 .wccell.peak .wbar{background:var(--warn)}
 table.breakdown .tcost{color:var(--warn)}
+
+/* details toggle under the main result */
+.result{margin-bottom:18px}
+#more > details{margin:0 0 18px}
+.result .morebtn{margin-top:16px; font-size:12px; padding:6px 14px}
+.gstat input[type=number]{width:100px; padding:3px 8px; font-size:15px; font-weight:600; color:var(--accent2); margin-bottom:2px; display:block}

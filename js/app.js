@@ -14,6 +14,7 @@ let unit="sec";
 let calcMode="solve";
 let restoring=false;   // true while applying URL state, to suppress hash writes
 let lastProfile=null;  // latest difficulty-curve samples, for hover readout
+let showMore=false;    // secondary results (everything but the headline number)
 
 const $ = id => document.getElementById(id);
 function num(id){const v=parseFloat($(id).value); return isNaN(v)?0:v;}
@@ -50,7 +51,7 @@ function addRow(time,frames,number){
   tr.innerHTML=`
     <td><input type="number" class="mNum" step="1" min="1" value="${n}"></td>
     <td><input type="number" class="mTime" step="0.01" min="0" value="${time??''}"></td>
-    <td><input type="text" class="mWin" inputmode="decimal" placeholder="- = ignored" value="${frames??''}"></td>
+    <td><input type="text" class="mWin" inputmode="decimal" placeholder="- to ignore" value="${frames??''}"></td>
     <td class="mMs" style="font-size:11px;color:#5b6675">—</td>
     <td><button class="del">&times;</button></td>`;
   tr.querySelector('.del').addEventListener('click',()=>{tr.remove(); recompute();});
@@ -116,9 +117,9 @@ function updateFpsUI(f){
   const raw=$('fps').value;
   document.querySelectorAll('#fpsPresets button').forEach(x=>x.classList.toggle('active',x.dataset.fps===String(parseFloat(raw))));
   const hint=$('fpsHint');
-  if(!(f>0)){ hint.className='hint warn'; hint.textContent='Frame rate must be greater than 0.'; }
-  else if(!Number.isInteger(parseFloat(raw))){ hint.className='hint warn'; hint.textContent='Non-integer fps — frames are usually whole numbers (still computed).'; }
-  else { hint.className='hint'; hint.textContent='1 frame = 1/fps seconds'; }
+  if(!(f>0)){ hint.className='hint warn'; hint.textContent='Must be above 0.'; }
+  else if(!Number.isInteger(parseFloat(raw))){ hint.className='hint warn'; hint.textContent='Not a whole number.'; }
+  else { hint.className='hint'; hint.textContent=''; }
 }
 
 // ---- .txt import / export --------------------------------------------------
@@ -136,14 +137,14 @@ function importText(text){
   const parsed=parseInputsText(text);
   if(parsed.length===0){
     status.style.color='var(--warn)';
-    status.textContent='No valid "time - window" lines found — see the format guide.';
+    status.textContent='No "time - window" lines found.';
     $('guideModal').classList.add('show');
     return;
   }
   manualBody.innerHTML='';
   parsed.forEach(r=>addRow(r[0],r[1]));
   status.style.color='var(--good)';
-  status.textContent=`Imported ${parsed.length} input${parsed.length>1?'s':''} (read as ${unit==='pct'?'%':'seconds'}).`;
+  status.textContent=`Imported ${parsed.length} input${parsed.length>1?'s':''}.`;
   recompute();
 }
 $('exportBtn').addEventListener('click',()=>{
@@ -155,7 +156,7 @@ $('exportBtn').addEventListener('click',()=>{
     if(t!=='' && w!=='') lines.push(`${t} - ${w}`);
   });
   const status=$('imStatus');
-  if(lines.length===1){ status.style.color='var(--warn)'; status.textContent='Nothing to export — add some inputs first.'; return; }
+  if(lines.length===1){ status.style.color='var(--warn)'; status.textContent='Nothing to export.'; return; }
   download(lines.join('\n')+'\n','text/plain','nandl-inputs.txt');
   status.style.color='var(--good)'; status.textContent=`Exported ${lines.length-1} input${lines.length-1>1?'s':''}.`;
 });
@@ -182,7 +183,7 @@ function importJson(text){
   const res=parseCalculatorJson(text);
   if(!res.ok){
     status.style.color='var(--warn)';
-    status.textContent=`JSON import failed — ${res.error}`;
+    status.textContent=`Import failed: ${res.error}`;
     return;
   }
   // window FPS is the timing-window rate = our fps
@@ -198,26 +199,22 @@ function importJson(text){
   res.inputs.forEach((inp,i)=>addRow(+inp.t.toFixed(6), inp.k==null?'-':inp.k, inp.n??(i+1)));
   applyModeUI('manual');
 
-  const notes=[];
-  if(res.ignored>0) notes.push(`${res.ignored} ignored window${res.ignored>1?'s':''}`);
-  if(res.respawnTime>0) notes.push(`respawn ${res.respawnTime}s`);
-  if(res.useFrames) notes.push(`frame positions read at ${res.gameFps} fps`);
   status.style.color='var(--good)';
-  status.textContent=`Imported ${res.inputs.length} input${res.inputs.length>1?'s':''} from JSON`+
-    (notes.length?` (${notes.join('; ')}).`:'.');
+  status.textContent=`Imported ${res.inputs.length} input${res.inputs.length>1?'s':''}`+
+    (res.ignored>0?`, ${res.ignored} ignored.`:'.');
   recompute();
 }
 $('exportJsonBtn').addEventListener('click',()=>{
   const status=$('imStatus');
   const inputs=readManual(num('tlen'));
   if(inputs.length===0){
-    status.style.color='var(--warn)'; status.textContent='Nothing to export — add some inputs first.';
+    status.style.color='var(--warn)'; status.textContent='Nothing to export.';
     return;
   }
   const doc=buildCalculatorJson({inputs, fps:num('fps')||240, respawnTime:Math.max(0,num('respawn'))});
   download(JSON.stringify(doc,null,2),'application/json','nandl-run.json');
   status.style.color='var(--good)';
-  status.textContent=`Exported ${inputs.length} input${inputs.length>1?'s':''} as JSON.`;
+  status.textContent=`Exported ${inputs.length} input${inputs.length>1?'s':''}.`;
 });
 
 // ---- format guide modal ----------------------------------------------------
@@ -245,12 +242,20 @@ $('toggleList').addEventListener('click',()=>applyListUI(!listHidden));
   sync();
 }
 
+// ---- details toggle (secondary results) ------------------------------------
+function applyMoreUI(show){
+  showMore=!!show;
+  $('more').classList.toggle('hidden',!showMore);
+  $('moreBtn').innerHTML = showMore ? '&#9650; Hide details' : '&#9660; Details';
+}
+$('moreBtn').addEventListener('click',()=>{ applyMoreUI(!showMore); recompute(); });
+
 // ---- clear all (with confirm popup) ----------------------------------------
 const confirmModal=$('confirmModal');
 $('clearBtn').addEventListener('click',()=>{
   const n=document.querySelectorAll('#manualBody tr').length;
   const status=$('imStatus');
-  if(n===0){ status.style.color='var(--muted)'; status.textContent='List is already empty.'; return; }
+  if(n===0){ status.style.color='var(--muted)'; status.textContent='Already empty.'; return; }
   $('confirmCount').textContent=n;
   confirmModal.classList.add('show');
 });
@@ -259,7 +264,7 @@ confirmModal.addEventListener('click',e=>{ if(e.target===confirmModal) confirmMo
 $('confirmClear').addEventListener('click',()=>{
   manualBody.innerHTML='';
   confirmModal.classList.remove('show');
-  const status=$('imStatus'); status.style.color='var(--good)'; status.textContent='Cleared all inputs.';
+  const status=$('imStatus'); status.style.color='var(--good)'; status.textContent='Cleared.';
   recompute();
 });
 // Esc closes any open modal
@@ -325,7 +330,7 @@ function fmtCount(v){
   return v>=1e5 ? v.toExponential(2) : Math.round(v).toLocaleString();
 }
 // ---- window-size tally -----------------------------------------------------
-function renderWindowCounts(inputs,runActive,rangeLabel){
+function renderWindowCounts(inputs){
   const panel=$('wcPanel'), grid=$('wcGrid'), note=$('wcNote');
   const w=windowCounts(inputs);
   if(w.rows.length===0){ panel.classList.add('hidden'); return; }
@@ -340,53 +345,45 @@ function renderWindowCounts(inputs,runActive,rangeLabel){
            `<div class="wms">${ms}</div>`+
            `<div class="wbar" style="width:${pct}%"></div></div>`;
   }).join('');
-  const what = runActive ? `run (${rangeLabel})` : 'level';
-  const bits=[`<b>${w.total}</b> timed input${w.total===1?'':'s'} across <b>${w.distinct}</b> distinct window size${w.distinct===1?'':'s'} in this ${what}`];
+  const bits=[`<b>${w.total}</b> input${w.total===1?'':'s'}`, `<b>${w.distinct}</b> size${w.distinct===1?'':'s'}`];
   if(w.ignored>0) bits.push(`<b>${w.ignored}</b> ignored`);
-  if(!w.filled) bits.push(`gaps not filled (largest window is ${w.max}f)`);
-  note.innerHTML=bits.join(' &nbsp;·&nbsp; ')+'.';
+  note.innerHTML=bits.join(' &nbsp;·&nbsp; ');
   panel.classList.remove('hidden');
 }
 
-function renderT(tg,refT,inputs,runActive,rangeLabel){
+function renderT(tg,refT){
   const note=$('tnote');
+  note.classList.toggle('hidden', !!tg && refT>0);
+  $('tworstLabel').textContent='costliest input';
   if(!tg || !(refT>0)){
-    ['tbig','tattempts','tref','tworst','tclear'].forEach(id=>$(id).textContent='—');
-    note.innerHTML='<span style="color:var(--warn)">Enter a reference precision greater than 0.</span>';
+    ['tbig','tattempts','tworst','tclear'].forEach(id=>$(id).textContent='—');
+    note.innerHTML='<span style="color:var(--warn)">Precision must be above 0.</span>';
     return;
   }
   $('tbig').textContent=fmtDur(tg.seconds);
   $('tattempts').textContent = isFinite(tg.attempts)
     ? (tg.attempts>=1e5 ? tg.attempts.toExponential(2) : Math.round(tg.attempts).toLocaleString())
     : '∞';
-  $('tref').textContent=refT.toLocaleString(undefined,{maximumFractionDigits:2});
   $('tclear').textContent=fmtDur(tg.clearTime);
 
   // which input eats the most grind, and what share of the total it is
   let wi=-1, wv=-1;
   tg.per.forEach((v,i)=>{ if(isFinite(v)&&v>wv){wv=v;wi=i;} });
   if(wi>=0 && wv>0){
-    const inp=inputs[wi];
     const share = tg.seconds>0 && isFinite(tg.seconds) ? (wv/tg.seconds*100) : 0;
     $('tworst').textContent=`#${wi+1} · ${fmtDur(wv)}`;
-    note.innerHTML=`Expected time to complete this ${runActive?`run (${rangeLabel})`:'level'} at precision `+
-      `<b>${refT.toLocaleString(undefined,{maximumFractionDigits:2})}</b>. `+
-      `The costliest single input is <b>#${wi+1}</b> at <b>${inp.t.toFixed(2)}s</b>`+
-      `${inp.k>0?` (<b>${inp.k}f</b>)`:''}, burning <b>${share.toFixed(0)}%</b> of the total — `+
-      `late windows cost far more than early ones, which is what <b>G</b> can't see.`;
+    $('tworstLabel').textContent=`costliest input (${share.toFixed(0)}%)`;
   } else {
     $('tworst').textContent='—';
-    note.innerHTML=`Expected time to complete this ${runActive?`run (${rangeLabel})`:'level'} at precision `+
-      `<b>${refT.toLocaleString(undefined,{maximumFractionDigits:2})}</b>.`;
   }
 }
 
-function renderG(g,refL,count,runActive,rangeLabel){
+function renderG(g,refL,count){
   const note=$('gnote');
+  note.classList.toggle('hidden', !!g && refL>0);
   if(!g || !(refL>0)){
-    $('gbits').textContent='—'; $('gattempts').textContent='—';
-    $('gref').textContent='—'; $('gper').textContent='—';
-    note.innerHTML='<span style="color:var(--warn)">Enter a reference precision greater than 0.</span>';
+    $('gbits').textContent='—'; $('gattempts').textContent='—'; $('gper').textContent='—';
+    note.innerHTML='<span style="color:var(--warn)">Precision must be above 0.</span>';
     return;
   }
   const bits=g.bits;
@@ -396,15 +393,10 @@ function renderG(g,refL,count,runActive,rangeLabel){
   $('gattempts').textContent = isFinite(g.attempts)
     ? (g.attempts>=1e5 ? g.attempts.toExponential(2) : Math.round(g.attempts).toLocaleString())
     : '∞';
-  $('gref').textContent = refL.toLocaleString(undefined,{maximumFractionDigits:2});
   $('gper').textContent = (isFinite(bits)&&count>0) ? (bits/count).toFixed(3) : '—';
-  const what = runActive ? `this run (${rangeLabel})` : 'this level';
-  note.innerHTML = `Bits of luck one clean completion of ${what} costs a player at precision `+
-    `<b>${refL.toLocaleString(undefined,{maximumFractionDigits:2})}</b>. `+
-    `One extra bit = twice the grind, and segments <b>add</b>: G(A then B) = G(A) + G(B).`;
 }
 
-function renderBreakdown(Lstar,cfg,Teff,runActive,rangeLabel,g,tg){
+function renderBreakdown(Lstar,cfg,Teff,g,tg){
   const bd=$('breakdown'), body=$('bdBody');
   const per=perInputStats(Lstar,cfg);
   body.innerHTML='';
@@ -432,7 +424,7 @@ function renderBreakdown(Lstar,cfg,Teff,runActive,rangeLabel,g,tg){
       <td class="tcost">${tg?fmtDur(tg.per[i]):'—'}</td>`;
     body.appendChild(tr);
   });
-  $('bdCount').textContent=`— ${per.length} input${per.length>1?'s':''}${runActive?` in run ${rangeLabel}`:''}`;
+  $('bdCount').textContent=`(${per.length})`;
   bd.classList.remove('hidden');
 }
 
@@ -498,12 +490,10 @@ function renderDifficulty(inputs,T,run){
   const real=inputs.filter(i=>i.k>0);
   const tight=real.length?real.reduce((a,b)=> b.k<a.k?b:a):null;
   const f=num('fps');
-  const tightTxt = tight
-    ? `tightest window <b>${tight.k}f</b> (~${f>0?(1000*tight.k/f).toFixed(1)+' ms':'—'})`
-    : 'no timed windows';
-  const modNote=anyModOn(mods) ? ` <span style="color:var(--accent)">Modifiers applied.</span>` : '';
-  $('diffCaption').innerHTML=`Relative difficulty across the level — higher = tighter windows and/or denser inputs. `+
-    `Hardest around <b>${prof.peakXPct.toFixed(0)}%</b>; ${tightTxt}.${modNote}`;
+  const parts=[`Peak at <b>${prof.peakXPct.toFixed(0)}%</b>`];
+  if(tight) parts.push(`tightest <b>${tight.k}f</b>${f>0?` (${(1000*tight.k/f).toFixed(1)} ms)`:''}`);
+  if(anyModOn(mods)) parts.push(`<span style="color:var(--accent)">modifiers on</span>`);
+  $('diffCaption').innerHTML=parts.join(' &nbsp;·&nbsp; ');
 
   lastProfile={xs:prof.xs, ys:prof.ys, xmax:prof.xmax};
 }
@@ -519,7 +509,7 @@ function renderDifficulty(inputs,T,run){
     const leftPx=frac*rect.width;
     cur.style.left=leftPx+'px'; cur.style.opacity='1';
     tip.style.left=Math.min(rect.width-4,Math.max(4,leftPx))+'px'; tip.style.opacity='1';
-    tip.textContent=`${xPct.toFixed(0)}%  ·  difficulty ${(y*100).toFixed(0)}%`;
+    tip.textContent=`${xPct.toFixed(0)}%  ·  ${(y*100).toFixed(0)}%`;
   });
   chart.addEventListener('mouseleave',()=>{ cur.style.opacity='0'; tip.style.opacity='0'; });
 }
@@ -557,16 +547,14 @@ function recompute(){
   // slice, breakdown, tally, G and T — agrees on what is being scored.
   const exOn=$('exOn').checked, exThr=num('exThr');
   const exHint=$('exHint');
+  exHint.classList.toggle('hidden',!exOn);
   if(exOn && exThr>0){
     const before=inputs.length;
     inputs=excludeWindows(inputs,exThr);
     const cut=before-inputs.length;
-    exHint.innerHTML=`Excluding windows of <b>${exThr}f</b> or wider &nbsp;·&nbsp; `+
-      `<b>${cut}</b> input${cut===1?'':'s'} dropped, <b>${inputs.length}</b> left.`;
+    exHint.innerHTML=`Exclude: <b>${cut}</b> dropped, <b>${inputs.length}</b> left`;
   } else if(exOn){
-    exHint.innerHTML='<span style="color:var(--warn)">Enter a minimum window of 1 or more.</span>';
-  } else {
-    exHint.textContent='Off — every window is scored.';
+    exHint.innerHTML='<span style="color:var(--warn)">Min window must be 1 or more.</span>';
   }
   $('exLabel').textContent = exThr>0 ? String(exThr) : '11';
 
@@ -574,8 +562,9 @@ function recompute(){
   const fullInputs = mode==='manual' ? inputs.slice() : [];
 
   // apply run / segment slice
-  let Teff=T, runActive=false, runValid=true, rangeLabel='', runLoPct=0, runHiPct=0;
+  let Teff=T, runActive=false, runValid=true, runLoPct=0, runHiPct=0;
   const runHint=$('runHint');
+  runHint.classList.toggle('hidden',!$('runOn').checked);
   if($('runOn').checked){
     const rng=parseRange($('runRange').value);
     if(rng && T>0){
@@ -586,17 +575,13 @@ function recompute(){
         inputs=sliceRun(inputs,lo,hi);
         Teff=hi-lo; runActive=true;
         runLoPct=lo/T*100; runHiPct=hi/T*100;
-        rangeLabel=`${lo.toFixed(2)}–${hi.toFixed(2)}s`;
         const loP=(lo/T*100), hiP=(hi/T*100);
-        runHint.className='totline';
-        runHint.innerHTML=`Run <b>${lo.toFixed(2)} – ${hi.toFixed(2)} s</b> `+
-          `(<b>${loP.toFixed(1)}% – ${hiP.toFixed(1)}%</b>) &nbsp;·&nbsp; length <b>${Teff.toFixed(2)} s</b> `+
-          `&nbsp;·&nbsp; <b>${inputs.length}</b> input${inputs.length===1?'':'s'} scored`;
+        runHint.innerHTML=`Run: <b>${lo.toFixed(2)}–${hi.toFixed(2)} s</b> `+
+          `(${loP.toFixed(1)}–${hiP.toFixed(1)}%) &nbsp;·&nbsp; <b>${Teff.toFixed(2)} s</b> `+
+          `&nbsp;·&nbsp; <b>${inputs.length}</b> input${inputs.length===1?'':'s'}`;
       } else runValid=false;
     } else runValid=false;
-    if(!runValid){ runHint.className='totline'; runHint.innerHTML=`<span style="color:var(--warn)">Enter a valid run range like <code>23.2 - 81.8</code>.</span>`; }
-  } else {
-    runHint.className='totline'; runHint.textContent='Off — the whole level is scored.';
+    if(!runValid){ runHint.innerHTML=`<span style="color:var(--warn)">Invalid range. Use <code>from - to</code>.</span>`; }
   }
 
   // difficulty profile reflects the whole level (manual mode), independent of target/fps validity
@@ -604,45 +589,47 @@ function recompute(){
 
   const stats=$('stats'), big=$('lstar'), rsub=$('rsub');
   const show=(msg)=>{big.textContent='—'; rsub.className='rsub msg'; rsub.textContent=msg; stats.style.display='none';
+    $('moreBtn').classList.add('hidden');
     $('breakdown').classList.add('hidden'); $('gPanel').classList.add('hidden');
     $('wcPanel').classList.add('hidden'); $('tPanel').classList.add('hidden');};
 
-  if(!(T>0)) return show('Enter a level length greater than 0.');
-  if(!(f>0)) return show('Enter a frame rate greater than 0.');
-  if($('runOn').checked && !runValid) return show('Enter a valid run range like "23.2 - 81.8".');
+  if(!(T>0)) return show('Set a level length.');
+  if(!(f>0)) return show('Set a window FPS.');
+  if($('runOn').checked && !runValid) return show('Invalid run range.');
   if(inputs.length===0) return show(
-    runActive ? 'No inputs fall inside the run range.'
-    : (exOn && exThr>0) ? `Every input is ${exThr}f or wider — nothing left to score.`
-    : 'Add at least one input.');
+    runActive ? 'No inputs in this range.'
+    : (exOn && exThr>0) ? `Every window is ${exThr}f or wider.`
+    : 'Add an input.');
 
   const mods=readMods();
   const cfg={inputs, f, T:Teff, mods, respawn:Math.max(0,num('respawn'))};
-  const what = runActive ? `run (${rangeLabel})` : 'level';
 
   let L, chk;
   if(calcMode==='fixed'){
     L=num('skill');
-    if(!(L>0)) return show('Enter a precision greater than 0.');
+    if(!(L>0)) return show('Set a precision.');
     chk=evaluate(L,cfg);
-    $('rlabel').textContent='Expected time to complete';
-    $('sigmaLabel').innerHTML='timing window &sigma; = 1/L';
+    $('rlabel').textContent='Expected time';
+    $('sigmaLabel').innerHTML='&sigma; = 1/L';
     big.textContent = isFinite(chk.ETC) ? fmtHours(chk.ETC/3600) : '∞';
     rsub.className='rsub';
-    rsub.innerHTML=`At precision <b>${L.toLocaleString(undefined,{maximumFractionDigits:2})}</b> on this `+
-      `${inputs.length}-input ${what}.`;
+    rsub.innerHTML=`at L = <b>${L.toLocaleString(undefined,{maximumFractionDigits:2})}</b>`;
   } else {
     const targetH=num('target');
-    if(!(targetH>0)) return show('Enter a target time greater than 0.');
+    if(!(targetH>0)) return show('Set a target time.');
     L=solveLstar(cfg,targetH*3600);
     chk=evaluate(L,cfg);
-    $('rlabel').innerHTML='Required Precision &nbsp;L*';
-    $('sigmaLabel').innerHTML='timing window &sigma; = 1/L*';
+    $('rlabel').innerHTML='Required precision &nbsp;L*';
+    $('sigmaLabel').innerHTML='&sigma; = 1/L*';
     big.textContent=L.toLocaleString(undefined,{maximumFractionDigits:1});
     rsub.className='rsub';
-    rsub.innerHTML=`Precision required to average a <b>${targetH}-hour</b> completion of this ${inputs.length}-input ${what}.`;
+    rsub.innerHTML=`for a <b>${targetH} h</b> average`;
   }
 
-  stats.style.display='flex';
+  $('moreBtn').classList.remove('hidden');
+  stats.style.display = showMore ? 'flex' : 'none';
+  // in fixed mode the headline already is the expected time
+  $('etcStat').classList.toggle('hidden', calcMode==='fixed');
   $('sigma').textContent=(1000/L).toFixed(2)+' ms';
   $('pc').textContent=chk.PC<1e-4?chk.PC.toExponential(2):(chk.PC*100).toFixed(3)+'%';
   $('attempts').textContent=isFinite(chk.attempts)?fmtCount(chk.attempts):'∞';
@@ -654,17 +641,17 @@ function recompute(){
   $('gPanel').classList.remove('hidden');
   const refL=num('refL');
   const g = refL>0 ? grindEntropy(refL,cfg) : null;
-  renderG(g,refL,inputs.length,runActive,rangeLabel);
+  renderG(g,refL,inputs.length);
 
   // Grind time at its own reference precision — position-sensitive, so it says
   // what G can't: a tight window late in the run costs whole attempts.
   $('tPanel').classList.remove('hidden');
   const refT=num('refT');
   const tg = refT>0 ? grindTime(refT,cfg) : null;
-  renderT(tg,refT,inputs,runActive,rangeLabel);
+  renderT(tg,refT);
 
-  renderBreakdown(L,cfg,Teff,runActive,rangeLabel,g,tg);
-  renderWindowCounts(inputs,runActive,rangeLabel);
+  renderBreakdown(L,cfg,Teff,g,tg);
+  renderWindowCounts(inputs);
 }
 
 // ---- URL-shareable state (no browser storage — state lives in the hash) ----
@@ -690,7 +677,7 @@ function serialize(){
     run:[$('runOn').checked?1:0, $('runRange').value],
     sm:$('smooth').value,
     gf:$('gameFps').value, rs:$('respawn').value,
-    cm:calcMode, sk:$('skill').value, rl:$('refL').value, rt:$('refT').value, lh:listHidden?1:0, ex:[$('exOn').checked?1:0, $('exThr').value],
+    cm:calcMode, sk:$('skill').value, rl:$('refL').value, rt:$('refT').value, lh:listHidden?1:0, sd:showMore?1:0, ex:[$('exOn').checked?1:0, $('exThr').value],
   };
 }
 function updateHash(){
@@ -724,6 +711,7 @@ function restore(){
     if(st.rt!=null) $('refT').value=st.rt;
     if(st.ex){ $('exOn').checked=!!st.ex[0]; if(st.ex[1]!=null) $('exThr').value=st.ex[1]; }
     applyListUI(!!st.lh);
+    applyMoreUI(!!st.sd);
     // run
     if(st.run){ $('runOn').checked=!!st.run[0]; $('runRange').value=st.run[1]??''; }
     if(st.sm!=null) $('smooth').value=st.sm;
@@ -741,9 +729,9 @@ $('copyLink').addEventListener('click',async()=>{
   const status=$('copyStatus');
   try{
     await navigator.clipboard.writeText(location.href);
-    status.style.color='var(--good)'; status.textContent='Link copied to clipboard.';
+    status.style.color='var(--good)'; status.textContent='Copied.';
   }catch(_){
-    status.style.color='var(--warn)'; status.textContent='Copy failed — copy the URL from the address bar.';
+    status.style.color='var(--warn)'; status.textContent='Copy failed. Use the address bar.';
   }
   setTimeout(()=>{status.textContent='';},2600);
 });
@@ -752,7 +740,6 @@ $('copyLink').addEventListener('click',async()=>{
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('sw.js').catch(()=>{});
-    navigator.serviceWorker.ready.then(()=>$('offlineBadge').classList.add('show')).catch(()=>{});
   });
 }
 

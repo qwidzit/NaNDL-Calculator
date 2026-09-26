@@ -1,7 +1,7 @@
 {
   "name": "NaNDL Precision Calculator",
   "short_name": "NaNDL Calc",
-  "description": "Estimate the timing precision needed to complete a Geometry-Dash-style level. Works offline.",
+  "description": "Timing precision needed to beat a Geometry Dash level in a target time.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
